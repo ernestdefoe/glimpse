@@ -1,0 +1,121 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ErnestDefoe\Glimpse\Api;
+
+use Carbon\Carbon;
+use ErnestDefoe\Glimpse\Story;
+use ErnestDefoe\Glimpse\StoryReport;
+use Flarum\Api\Context;
+use Flarum\Api\Endpoint;
+use Flarum\Api\Resource\AbstractDatabaseResource;
+use Flarum\Api\Schema;
+use Flarum\Api\Sort\SortColumn;
+use Flarum\Foundation\ValidationException;
+use Flarum\Locale\TranslatorInterface;
+use Illuminate\Database\Eloquent\Builder;
+use Tobyz\JsonApiServer\Context as BaseContext;
+
+/**
+ * The `story-reports` type.
+ *
+ * POST   /api/story-reports         {reason, detail?, relationships.story}: any member who can see it
+ * GET    /api/story-reports         moderators: every report, newest first, with story and reporter
+ * DELETE /api/story-reports/{id}    moderators: dismiss
+ *
+ * @extends AbstractDatabaseResource<StoryReport>
+ */
+class StoryReportResource extends AbstractDatabaseResource
+{
+    public function __construct(private readonly TranslatorInterface $translator)
+    {
+    }
+
+    public function type(): string
+    {
+        return 'story-reports';
+    }
+
+    public function model(): string
+    {
+        return StoryReport::class;
+    }
+
+    /** @param Builder<StoryReport> $query */
+    public function scope(Builder $query, BaseContext $context): void
+    {
+        $actor = $context->getActor();
+        if (! $actor->hasPermission('glimpse.moderate')) {
+            $query->where('glimpse_reports.user_id', $actor->isGuest() ? 0 : $actor->id);
+        }
+    }
+
+    public function endpoints(): array
+    {
+        return [
+            Endpoint\Index::make()
+                ->authenticated()
+                ->can('glimpse.moderate')
+                ->defaultInclude(['story', 'story.user', 'user'])
+                ->defaultSort('-createdAt')
+                ->paginate(20, 50),
+            Endpoint\Create::make()
+                ->authenticated(),
+            Endpoint\Delete::make()
+                ->authenticated()
+                ->can('glimpse.moderate'),
+        ];
+    }
+
+    public function fields(): array
+    {
+        return [
+            Schema\Str::make('reason')
+                ->requiredOnCreate()
+                ->writableOnCreate()
+                ->in(StoryReport::REASONS),
+            Schema\Str::make('detail')
+                ->nullable()
+                ->writableOnCreate()
+                ->maxLength(500),
+            Schema\DateTime::make('createdAt')->property('created_at'),
+            Schema\Relationship\ToOne::make('story')
+                ->type('stories')
+                ->includable()
+                ->requiredOnCreate()
+                ->writableOnCreate(),
+            Schema\Relationship\ToOne::make('user')
+                ->type('users')
+                ->includable(),
+        ];
+    }
+
+    /** @return list<SortColumn> */
+    public function sorts(): array
+    {
+        return [
+            SortColumn::make('createdAt'),
+        ];
+    }
+
+    /** @param Context $context */
+    public function creating(object $model, BaseContext $context): ?object
+    {
+        $actor = $context->getActor();
+        $story = Story::query()->find($model->story_id);
+        if ($story === null) {
+            throw new ValidationException(['story' => $this->translator->trans('ernestdefoe-glimpse.api.story_gone')]);
+        }
+        $actor->assertCan('report', $story);
+
+        if (StoryReport::query()->where('story_id', $story->id)->where('user_id', $actor->id)->exists()) {
+            throw new ValidationException(['reason' => $this->translator->trans('ernestdefoe-glimpse.api.already_reported')]);
+        }
+
+        $model->user_id = $actor->id;
+        $model->created_at = Carbon::now();
+
+        return $model;
+    }
+}

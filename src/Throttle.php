@@ -1,0 +1,38 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ErnestDefoe\Glimpse;
+
+use Carbon\Carbon;
+use Flarum\Http\RequestUtil;
+use Psr\Http\Message\ServerRequestInterface;
+
+/**
+ * A flood guard for uploads and new stories: one every few seconds per member (moderators exempt).
+ * The daily limit is StoryWriter's.
+ */
+class Throttle
+{
+    private const ROUTES = ['stories.create', 'story-media.upload'];
+
+    private const SECONDS = 3;
+
+    public function __invoke(ServerRequestInterface $request): ?bool
+    {
+        if (! in_array($request->getAttribute('routeName'), self::ROUTES, true)) {
+            return null;
+        }
+
+        $actor = RequestUtil::getActor($request);
+        if ($actor->isGuest() || $actor->hasPermission('glimpse.moderate')) {
+            return null;
+        }
+
+        $since = Carbon::now()->subSeconds(self::SECONDS);
+
+        return $request->getAttribute('routeName') === 'stories.create'
+            ? Story::query()->where('user_id', $actor->id)->where('created_at', '>', $since)->exists()
+            : StoryMedia::query()->where('user_id', $actor->id)->where('created_at', '>', $since)->exists();
+    }
+}
