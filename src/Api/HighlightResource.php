@@ -24,13 +24,13 @@ use Tobyz\JsonApiServer\Context as BaseContext;
 use Tobyz\JsonApiServer\Pagination\Pagination;
 
 /**
- * The `story-highlights` type: a member's named, lasting collections of their own stories.
+ * The `glimpse-highlights` type: a member's named, lasting collections of their own stories.
  *
- * GET    /api/story-highlights?filter[user]=<id>   a profile's row, in order, with the stories each
+ * GET    /api/glimpse-highlights?filter[user]=<id>   a profile's row, in order, with the stories each
  *                                                  holds that the viewer may see
- * POST   /api/story-highlights                     {title, relationships.stories}
- * PATCH  /api/story-highlights/{id}                rename, reorder, or replace its stories
- * DELETE /api/story-highlights/{id}                the stories stay (and expire as usual)
+ * POST   /api/glimpse-highlights                     {title, relationships.stories}
+ * PATCH  /api/glimpse-highlights/{id}                rename, reorder, or replace its stories
+ * DELETE /api/glimpse-highlights/{id}                the stories stay (and expire as usual)
  *
  * @extends AbstractDatabaseResource<Highlight>
  */
@@ -46,7 +46,7 @@ class HighlightResource extends AbstractDatabaseResource
 
     public function type(): string
     {
-        return 'story-highlights';
+        return 'glimpse-highlights';
     }
 
     public function model(): string
@@ -105,7 +105,7 @@ class HighlightResource extends AbstractDatabaseResource
                 ->type('users')
                 ->includable(),
             Schema\Relationship\ToMany::make('stories')
-                ->type('stories')
+                ->type('glimpse-stories')
                 ->includable()
                 ->writable()
                 // The viewer's visibility rule and flags (seen, reaction), and the media: one query for every story.

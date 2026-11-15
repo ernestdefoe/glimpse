@@ -1,4 +1,5 @@
 import Viewer, { type ViewerOptions } from './Viewer';
+import { whenSeenSaved } from './viewerTools';
 
 let mounted: HTMLElement | null = null;
 
@@ -9,9 +10,12 @@ export function openViewer(options: ViewerOptions): void {
   mounted.className = 'GlimpseViewer-root';
   document.body.appendChild(mounted);
   const close = () => {
+    // Removing the viewer flushes its last seen marks; onclose (the bar's reload) runs once they are saved.
     closeViewer();
-    options.onclose?.();
-    m.redraw();
+    whenSeenSaved().then(() => {
+      options.onclose?.();
+      m.redraw();
+    });
   };
   m.mount(mounted, { view: () => <Viewer options={options} close={close} /> });
 }

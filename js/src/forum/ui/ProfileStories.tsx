@@ -45,8 +45,8 @@ export default class ProfileStories extends Component<ProfileStoriesAttrs> {
     const id = this.attrs.user.id()!;
     this.loading = true;
     Promise.all([
-      app.store.find<StoryHighlight[]>('story-highlights', { filter: { user: id } }),
-      app.store.find<Story[]>('stories', {
+      app.store.find<StoryHighlight[]>('glimpse-highlights', { filter: { user: id } }),
+      app.store.find<Story[]>('glimpse-stories', {
         filter: this.own() ? { author: id } : { author: id, live: '1' },
         sort: 'createdAt',
         page: { limit: 100, total: 0 },

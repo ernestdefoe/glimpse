@@ -66,7 +66,7 @@ export default class ViewerMenu extends Component<ViewerMenuAttrs> {
   private mute(user: User): void {
     this.attrs.onclose(false);
     app.store
-      .createRecord('story-mutes')
+      .createRecord('glimpse-mutes')
       .save({ relationships: { mutedUser: user } })
       .then(() => {
         this.attrs.onsay(tx('viewer.muted', { name: user.displayName() }));

@@ -57,13 +57,13 @@ class QueryCountTest extends GlimpseTestCase
         $this->seed(1);
         $before = [];
         foreach ([null, 3, 4] as $as) {
-            $before[] = [$this->queries('/api/stories', $bar, $as), $this->queries('/api/stories', $page, $as)];
+            $before[] = [$this->queries('/api/glimpse-stories', $bar, $as), $this->queries('/api/glimpse-stories', $page, $as)];
         }
 
         $this->seed(29, 101);
         foreach ([null, 3, 4] as $i => $as) {
-            $this->assertSame($before[$i][0], $this->queries('/api/stories', $bar, $as), 'The bar for 30 authors costs what one does, as '.($as ?? 'guest'));
-            $this->assertSame($before[$i][1], $this->queries('/api/stories', $page, $as), 'A page of 24 costs what a page of 2 does, as '.($as ?? 'guest'));
+            $this->assertSame($before[$i][0], $this->queries('/api/glimpse-stories', $bar, $as), 'The bar for 30 authors costs what one does, as '.($as ?? 'guest'));
+            $this->assertSame($before[$i][1], $this->queries('/api/glimpse-stories', $page, $as), 'A page of 24 costs what a page of 2 does, as '.($as ?? 'guest'));
         }
     }
 
@@ -84,7 +84,7 @@ class QueryCountTest extends GlimpseTestCase
             $this->database()->table('glimpse_highlight_stories')->insert(array_map(fn ($id) => ['highlight_id' => $highlightId, 'story_id' => $id, 'position' => 0], $ids)),
         ];
         $highlight($one, 1);
-        $fewQueries = $this->queries('/api/story-highlights', ['filter' => ['user' => '100']], 3);
+        $fewQueries = $this->queries('/api/glimpse-highlights', ['filter' => ['user' => '100']], 3);
 
         $now = Carbon::now();
         $media = [];
@@ -93,13 +93,13 @@ class QueryCountTest extends GlimpseTestCase
             $media[] = $this->insert(100, ['kind' => 'photo', 'text' => null, 'media_id' => $mediaId]);
         }
         $this->database()->table('glimpse_highlight_stories')->insert(array_map(fn ($id) => ['highlight_id' => 1, 'story_id' => $id, 'position' => 1], $media));
-        $this->assertSame($fewQueries, $this->queries('/api/story-highlights', ['filter' => ['user' => '100']], 3));
+        $this->assertSame($fewQueries, $this->queries('/api/glimpse-highlights', ['filter' => ['user' => '100']], 3));
 
         $this->database()->table('glimpse_reports')->insert(['story_id' => $media[0], 'user_id' => 4, 'reason' => 'spam', 'created_at' => $now]);
-        $oneReport = $this->queries('/api/story-reports', [], 5);
+        $oneReport = $this->queries('/api/glimpse-reports', [], 5);
         foreach (array_slice($media, 1) as $storyId) {
             $this->database()->table('glimpse_reports')->insert(['story_id' => $storyId, 'user_id' => 4, 'reason' => 'spam', 'created_at' => $now]);
         }
-        $this->assertSame($oneReport, $this->queries('/api/story-reports', [], 5));
+        $this->assertSame($oneReport, $this->queries('/api/glimpse-reports', [], 5));
     }
 }

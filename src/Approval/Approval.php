@@ -21,10 +21,12 @@ class Approval
 
     public function holds(User $actor): bool
     {
-        if ($actor->hasPermission('glimpse.skipApproval')) {
-            return false;
-        }
+        return ! $actor->hasPermission('glimpse.skipApproval') && $this->isNew($actor);
+    }
 
+    /** Whether the member is still new by the admin's measures. */
+    protected function isNew(User $actor): bool
+    {
         $posts = $this->config->approvalPosts();
         $days = $this->config->approvalDays();
 

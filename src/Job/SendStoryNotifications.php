@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use ErnestDefoe\Glimpse\Config;
 use ErnestDefoe\Glimpse\Enum\Status;
 use ErnestDefoe\Glimpse\Follows\FollowGraph;
+use ErnestDefoe\Glimpse\Ignores\IgnoreGraph;
 use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Notification\NewStoryBlueprint;
 use ErnestDefoe\Glimpse\Notification\StoryMentionedBlueprint;
@@ -17,6 +18,7 @@ use Flarum\Group\Permission;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\Queue\AbstractJob;
 use Flarum\User\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 
@@ -37,7 +39,7 @@ class SendStoryNotifications extends AbstractJob
         parent::__construct();
     }
 
-    public function handle(NotificationSyncer $notifications, Config $config, FollowGraph $follows): void
+    public function handle(NotificationSyncer $notifications, Config $config, FollowGraph $follows, IgnoreGraph $ignores): void
     {
         // The mentioned members' groups too: the visibility rule reads their permissions.
         $story = Story::query()->with(['user', 'mentionedUsers.groups'])->find($this->storyId);
@@ -56,23 +58,9 @@ class SendStoryNotifications extends AbstractJob
             return;
         }
 
-        $skip = array_map(fn (User $user): int => $user->id, $mentioned);
-        $sent = 0;
+        $followers = $this->followers($author, $mentioned, $config, $follows, $ignores);
         $cap = $config->notifyCap();
-
-        // Followers who may view stories at all, found set-wise: no permission lookup per person.
-        $viewerGroups = Ids::of(Permission::query()->where('permission', 'glimpse.view')->pluck('group_id'));
-        $everyone = array_intersect($viewerGroups, [Group::GUEST_ID, Group::MEMBER_ID]) !== [];
-
-        $followers = User::query()
-            ->whereIn('users.id', $follows->followersOf($author->id))
-            ->whereNotIn('users.id', $skip === [] ? [0] : $skip)
-            ->where('users.is_email_confirmed', true);
-
-        if (! $everyone) {
-            $followers->whereIn('users.id', fn (QueryBuilder $q) => $q->select('user_id')->from('group_user')
-                ->whereIn('group_id', array_merge([Group::ADMINISTRATOR_ID], $viewerGroups)));
-        }
+        $sent = 0;
 
         $followers->orderBy('users.id')->chunk(self::CHUNK, function (Collection $users) use ($story, $author, $notifications, &$sent, $cap): bool {
             $recipients = array_values($users->take($cap - $sent)->all());
@@ -83,6 +71,37 @@ class SendStoryNotifications extends AbstractJob
 
             return $sent < $cap;
         });
+    }
+
+    /**
+     * The author's followers who may view stories at all and weren't already told (mentioned), found
+     * set-wise: no permission lookup per person.
+     *
+     * @param list<User> $mentioned
+     * @return Builder<User>
+     */
+    private function followers(User $author, array $mentioned, Config $config, FollowGraph $follows, IgnoreGraph $ignores): Builder
+    {
+        $skip = array_map(fn (User $user): int => $user->id, $mentioned);
+        $viewerGroups = Ids::of(Permission::query()->where('permission', 'glimpse.view')->pluck('group_id'));
+
+        $followers = User::query()
+            ->whereIn('users.id', $follows->followersOf($author->id))
+            ->whereNotIn('users.id', $skip === [] ? [0] : $skip)
+            ->where('users.is_email_confirmed', true);
+
+        // Followers the author ignores aren't told (fof/ignore-users, with the admin's switch on).
+        if ($ignores->available() && $config->ignoreHidesMine()) {
+            $followers->whereNotIn('users.id', $ignores->ignoredBy($author->id));
+        }
+
+        // Unless guests or all members may view stories, only members of a group that may.
+        if (array_intersect($viewerGroups, [Group::GUEST_ID, Group::MEMBER_ID]) === []) {
+            $followers->whereIn('users.id', fn (QueryBuilder $q) => $q->select('user_id')->from('group_user')
+                ->whereIn('group_id', array_merge([Group::ADMINISTRATOR_ID], $viewerGroups)));
+        }
+
+        return $followers;
     }
 
     /**

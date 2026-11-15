@@ -42,17 +42,17 @@ const page = (name: 'StoriesPage' | 'QueuePage') => () => ui().then(async (chunk
 
 const extenders = [
   new Extend.Store()
-    .add('stories', Story)
-    .add('story-highlights', StoryHighlight)
-    .add('story-views', StoryView)
-    .add('story-media', StoryMedia)
-    .add('story-reports', StoryReport)
-    .add('story-mutes', StoryMute),
+    .add('glimpse-stories', Story)
+    .add('glimpse-highlights', StoryHighlight)
+    .add('glimpse-views', StoryView)
+    .add('glimpse-media', StoryMedia)
+    .add('glimpse-reports', StoryReport)
+    .add('glimpse-mutes', StoryMute),
   new Extend.Routes()
-    .add('glimpse.stories', '/stories', page('StoriesPage'))
-    .add('glimpse.queue', '/stories/queue', page('QueuePage'))
-    .add('glimpse.story', '/stories/:id', page('StoriesPage'))
-    .add('user.glimpse', '/u/:username/stories', () => ui().then(async (chunk) => ({ default: await chunk.userStoriesPage() }))),
+    .add('glimpse.stories', '/glimpse', page('StoriesPage'))
+    .add('glimpse.queue', '/glimpse/queue', page('QueuePage'))
+    .add('glimpse.story', '/glimpse/:id', page('StoriesPage'))
+    .add('user.glimpse', '/u/:username/glimpse', () => ui().then(async (chunk) => ({ default: await chunk.userStoriesPage() }))),
   Object.keys(NOTIFICATIONS).reduce((ext, type) => ext.add(type, notificationComponent(type)), new Extend.Notification()),
 ];
 

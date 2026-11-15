@@ -31,7 +31,7 @@ function play(stories: Story[], start: Story): void {
   if (author) openViewer({ users, start: author, startStory: start });
 }
 
-/** `/stories` (and `/stories/:id`, which opens that story over it): every live story you can see. */
+/** `/glimpse` (and `/glimpse/:id`, which opens that story over it): every live story you can see. */
 export class StoriesPage extends Page {
   private stories: Story[] = [];
   private loading = true;
@@ -49,7 +49,7 @@ export class StoriesPage extends Page {
     const id = m.route.param('id');
     if (id) {
       app.store
-        .find<Story>('stories', id)
+        .find<Story>('glimpse-stories', id)
         .then((story) => {
           const user = (story as Story).user();
           if (user)
@@ -73,7 +73,7 @@ export class StoriesPage extends Page {
     this.loading = true;
     const filter: Record<string, string> = this.following ? { live: '1', following: '1' } : { live: '1' };
     app.store
-      .find<Story[]>('stories', { filter, page: { offset, limit: PAGE, total: 0 } })
+      .find<Story[]>('glimpse-stories', { filter, page: { offset, limit: PAGE, total: 0 } })
       .then((stories) => {
         this.stories = offset ? [...this.stories, ...stories] : [...stories];
         this.more = !!stories.payload?.links?.next;
@@ -135,7 +135,7 @@ export class StoriesPage extends Page {
   }
 }
 
-/** `/stories/queue`: stories waiting for approval, and reported ones. Moderators only (the server checks). */
+/** `/glimpse/queue`: stories waiting for approval, and reported ones. Moderators only (the server checks). */
 export class QueuePage extends Page {
   private tab: 'pending' | 'reported' = 'pending';
   private stories: Story[] = [];
@@ -153,10 +153,10 @@ export class QueuePage extends Page {
     const request =
       this.tab === 'pending'
         ? app.store
-            .find<Story[]>('stories', { filter: { status: 'pending' }, page: { limit: 50, total: 0 } })
+            .find<Story[]>('glimpse-stories', { filter: { status: 'pending' }, page: { limit: 50, total: 0 } })
             .then((s) => (this.stories = [...(s as Story[])]))
         : app.store
-            .find<StoryReport[]>('story-reports', { include: 'story,story.user,user', page: { limit: 50, total: 0 } })
+            .find<StoryReport[]>('glimpse-reports', { include: 'story,story.user,user', page: { limit: 50, total: 0 } })
             .then((r) => (this.reports = [...(r as StoryReport[])]));
     request.catch(failed).finally(() => {
       this.loading = false;

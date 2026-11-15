@@ -20,11 +20,11 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
- * The `story-reports` type.
+ * The `glimpse-reports` type.
  *
- * POST   /api/story-reports         {reason, detail?, relationships.story}: any member who can see it
- * GET    /api/story-reports         moderators: every report, newest first, with story and reporter
- * DELETE /api/story-reports/{id}    moderators: dismiss
+ * POST   /api/glimpse-reports         {reason, detail?, relationships.story}: any member who can see it
+ * GET    /api/glimpse-reports         moderators: every report, newest first, with story and reporter
+ * DELETE /api/glimpse-reports/{id}    moderators: dismiss
  *
  * @extends AbstractDatabaseResource<StoryReport>
  */
@@ -36,7 +36,7 @@ class StoryReportResource extends AbstractDatabaseResource
 
     public function type(): string
     {
-        return 'story-reports';
+        return 'glimpse-reports';
     }
 
     public function model(): string
@@ -84,7 +84,7 @@ class StoryReportResource extends AbstractDatabaseResource
                 ->maxLength(500),
             Schema\DateTime::make('createdAt')->property('created_at'),
             Schema\Relationship\ToOne::make('story')
-                ->type('stories')
+                ->type('glimpse-stories')
                 ->includable()
                 ->requiredOnCreate()
                 ->writableOnCreate(),

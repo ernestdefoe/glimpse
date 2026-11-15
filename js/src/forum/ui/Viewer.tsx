@@ -13,7 +13,7 @@ import Gestures from './gestures';
 import caption from './caption';
 import ReplyBar from './ReplyBar';
 import ViewerMenu from './ViewerMenu';
-import { AUDIENCE_ICONS, hostOf, preload } from './viewerTools';
+import { AUDIENCE_ICONS, hostOf, preload, trackSeen } from './viewerTools';
 import { openSeenBy } from './modals';
 
 export interface ViewerOptions {
@@ -49,7 +49,7 @@ export default class Viewer extends Component<ViewerAttrs> {
   private stories: Story[] = [];
   private index = 0;
   private loading = false;
-  private cache = new Map<string, Promise<Story[]>>();
+  private cache = new Map<string, Promise<Story[] | null>>();
 
   private elapsed = 0;
   private duration = 6000;
@@ -115,17 +115,18 @@ export default class Viewer extends Component<ViewerAttrs> {
     return this.stories[this.index];
   }
 
-  private storiesOf(user: User): Promise<Story[]> {
+  /** The person's live stories, oldest first; null when they couldn't be loaded. */
+  private storiesOf(user: User): Promise<Story[] | null> {
     const id = user.id()!;
     if (!this.cache.has(id)) {
       this.cache.set(
         id,
         app.store
-          .find<Story[]>('stories', { filter: { author: id, live: '1' }, sort: 'createdAt', page: { limit: 100, total: 0 } })
+          .find<Story[]>('glimpse-stories', { filter: { author: id, live: '1' }, sort: 'createdAt', page: { limit: 100, total: 0 } })
           .then((stories) => [...(stories as Story[])])
           .catch(() => {
             failed();
-            return [];
+            return null;
           })
       );
     }
@@ -140,6 +141,8 @@ export default class Viewer extends Component<ViewerAttrs> {
     this.storiesOf(user).then((stories) => {
       if (this.user() !== user) return;
       this.loading = false;
+      // Couldn't load (the alert said so): stop here rather than skip them as if they had nothing.
+      if (stories === null) return this.attrs.close();
       if (!stories.length) {
         // Gone (expired, deleted) since the bar was drawn: on to the next person.
         this.users.splice(this.userIndex, 1);
@@ -174,7 +177,7 @@ export default class Viewer extends Component<ViewerAttrs> {
     const next = this.stories[this.index + 1];
     if (next) return preload(next);
     const nextUser = this.users[this.userIndex + 1];
-    if (nextUser) this.storiesOf(nextUser).then((stories) => stories[0] && preload(stories[0]));
+    if (nextUser) this.storiesOf(nextUser).then((stories) => stories?.[0] && preload(stories[0]));
   }
 
   private markSeen(story: Story): void {
@@ -190,10 +193,13 @@ export default class Viewer extends Component<ViewerAttrs> {
     if (!this.seen.size) return;
     const ids = [...this.seen].map(Number);
     this.seen.clear();
-    // Didn't go through: keep them for the next flush (closing the viewer flushes once more).
-    app
-      .request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/seen`, body: { ids }, errorHandler: () => {} })
-      .catch(() => ids.forEach((id) => this.seen.add(String(id))));
+    // The bar reloads after the viewer closes: it waits for this, so what was just seen is grey.
+    // A send that fails goes back in the batch for the next flush (closing flushes once more).
+    trackSeen(
+      app
+        .request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/glimpse-stories/seen`, body: { ids }, errorHandler: () => {} })
+        .catch(() => ids.forEach((id) => this.seen.add(String(id))))
+    );
   }
 
   // ---------- playback ----------
@@ -317,7 +323,11 @@ export default class Viewer extends Component<ViewerAttrs> {
     const previous = story.myReaction();
     story.pushAttributes({ myReaction: reaction });
     app
-      .request<ApiPayloadSingle>({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/${story.id()}/reaction`, body: { reaction } })
+      .request<ApiPayloadSingle>({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/glimpse-stories/${story.id()}/reaction`,
+        body: { reaction },
+      })
       .then((payload) => {
         app.store.pushPayload(payload);
         this.say(reaction ? tx('viewer.reacted', { reaction }) : tx('viewer.unreacted'));

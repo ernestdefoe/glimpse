@@ -50,7 +50,7 @@ export class SeenByModal extends Modal<SeenByAttrs> {
   load(offset: number): void {
     this.busy = true;
     app.store
-      .find<StoryView[]>('story-views', { filter: { story: this.attrs.story.id() }, page: { offset, limit: PAGE, total: 0 } })
+      .find<StoryView[]>('glimpse-views', { filter: { story: this.attrs.story.id() }, page: { offset, limit: PAGE, total: 0 } })
       .then((views) => {
         this.views = offset ? [...this.views, ...views] : [...views];
         this.more = !!views.payload?.links?.next;
@@ -181,7 +181,7 @@ export class ReportModal extends FormModal<ReportAttrs> {
     e.preventDefault();
     this.loading = true;
     app.store
-      .createRecord('story-reports')
+      .createRecord('glimpse-reports')
       .save({ reason: this.reason, detail: this.detail.trim() || null, relationships: { story: this.attrs.story } })
       .then(() => {
         this.hide();
@@ -203,7 +203,7 @@ export class HighlightPickerModal extends FormModal<HighlightPickerAttrs> {
   oninit(vnode: Mithril.Vnode<HighlightPickerAttrs, this>) {
     super.oninit(vnode);
     app.store
-      .find<StoryHighlight[]>('story-highlights', { filter: { user: app.session.user!.id() } })
+      .find<StoryHighlight[]>('glimpse-highlights', { filter: { user: app.session.user!.id() } })
       .then((highlights) => (this.highlights = [...(highlights as StoryHighlight[])]))
       .catch(() => {
         this.highlights = [];
@@ -286,7 +286,7 @@ export class HighlightPickerModal extends FormModal<HighlightPickerAttrs> {
     if (!title) return;
     this.loading = true;
     app.store
-      .createRecord('story-highlights')
+      .createRecord('glimpse-highlights')
       .save({ title, relationships: { stories: [this.attrs.story] } })
       .then(() => {
         this.hide();

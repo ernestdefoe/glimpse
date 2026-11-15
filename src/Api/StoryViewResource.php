@@ -18,9 +18,9 @@ use Tobyz\JsonApiServer\Pagination\OffsetPagination;
 use Tobyz\JsonApiServer\Pagination\Pagination;
 
 /**
- * The `story-views` type: the seen-by list, for a story's author and moderators only.
+ * The `glimpse-views` type: the seen-by list, for a story's author and moderators only.
  *
- * GET /api/story-views?filter[story]=<id>   newest first, 20 at a time, with each viewer.
+ * GET /api/glimpse-views?filter[story]=<id>   newest first, 20 at a time, with each viewer.
  *
  * @extends AbstractDatabaseResource<StoryView>
  */
@@ -28,7 +28,7 @@ class StoryViewResource extends AbstractDatabaseResource
 {
     public function type(): string
     {
-        return 'story-views';
+        return 'glimpse-views';
     }
 
     public function model(): string

@@ -39,15 +39,15 @@ class BarFilter implements FilterInterface
 
         $authors = Story::whereVisibleTo($actor)
             ->select('glimpse_stories.user_id')
-            // Unqualified on purpose: this subquery reads one table, so no prefix is needed.
-            ->selectRaw('MAX(created_at) as glimpse_latest')
+            // Unqualified on purpose: this subquery reads one table, so no prefix is needed. The newest
+            // story is the highest id (two stories in the same second still give one row).
+            ->selectRaw('MAX(created_at) as glimpse_latest, MAX(id) as glimpse_newest')
             ->groupBy('glimpse_stories.user_id')
             ->orderByDesc('glimpse_latest')
             ->limit(self::AUTHORS);
         LiveFilter::constrain($authors, $actor);
 
         $query->joinSub($authors->toBase(), 'glimpse_bar', fn (JoinClause $join) => $join
-            ->on('glimpse_bar.user_id', '=', 'glimpse_stories.user_id')
-            ->on('glimpse_bar.glimpse_latest', '=', 'glimpse_stories.created_at'));
+            ->on('glimpse_bar.glimpse_newest', '=', 'glimpse_stories.id'));
     }
 }

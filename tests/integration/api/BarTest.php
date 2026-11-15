@@ -15,7 +15,7 @@ class BarTest extends GlimpseTestCase
     private function bar(?int $as): array
     {
         $rows = [];
-        foreach ($this->json($this->get('/api/stories', $as, ['filter' => ['bar' => '1']]))['data'] as $row) {
+        foreach ($this->json($this->get('/api/glimpse-stories', $as, ['filter' => ['bar' => '1']]))['data'] as $row) {
             $rows[(int) $row['relationships']['user']['data']['id']] = $row['attributes'] + ['id' => (int) $row['id']];
         }
 
@@ -36,6 +36,18 @@ class BarTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function two_stories_in_the_same_second_are_still_one_ring(): void
+    {
+        $now = Carbon::now();
+        $this->insert(2, ['created_at' => $now]);
+        $second = $this->insert(2, ['created_at' => $now]);
+
+        $bar = $this->bar(3);
+        $this->assertCount(1, $bar);
+        $this->assertSame($second, $bar[2]['id']);
+    }
+
+    #[Test]
     public function an_author_is_unseen_until_every_story_they_have_is_seen(): void
     {
         $first = $this->insert(2, ['created_at' => Carbon::now()->subMinutes(5)]);
@@ -43,15 +55,15 @@ class BarTest extends GlimpseTestCase
         $this->insert(4);
 
         $this->assertTrue($this->bar(3)[2]['authorHasUnseen']);
-        $this->postJson('/api/stories/seen', 3, ['ids' => [$second]]);
+        $this->postJson('/api/glimpse-stories/seen', 3, ['ids' => [$second]]);
         $this->assertTrue($this->bar(3)[2]['authorHasUnseen'], 'The older one is still new.');
-        $this->postJson('/api/stories/seen', 3, ['ids' => [$first]]);
+        $this->postJson('/api/glimpse-stories/seen', 3, ['ids' => [$first]]);
         $this->assertFalse($this->bar(3)[2]['authorHasUnseen']);
         $this->assertTrue($this->bar(3)[4]['authorHasUnseen']);
 
         // Guests see nothing as seen; the flag is only on the bar.
         $this->assertTrue($this->bar(null)[2]['authorHasUnseen']);
-        $this->assertArrayNotHasKey('authorHasUnseen', $this->json($this->get("/api/stories/$first", 3))['data']['attributes']);
+        $this->assertArrayNotHasKey('authorHasUnseen', $this->json($this->get("/api/glimpse-stories/$first", 3))['data']['attributes']);
     }
 
     #[Test]
@@ -59,7 +71,7 @@ class BarTest extends GlimpseTestCase
     {
         $this->insert(2);
         $hidden = $this->insert(2, ['audience' => 'followers']);
-        $this->postJson('/api/stories/seen', 4, ['ids' => $this->ids(4)]);
+        $this->postJson('/api/glimpse-stories/seen', 4, ['ids' => $this->ids(4)]);
 
         // The stranger has seen all they can see: the followers-only story mustn't keep the ring lit.
         $this->assertFalse($this->bar(4)[2]['authorHasUnseen']);
@@ -72,10 +84,10 @@ class BarTest extends GlimpseTestCase
         $id = $this->insert(2);
         $this->database()->table('glimpse_highlights')->insert(['id' => 1, 'user_id' => 2, 'title' => 'Keep', 'position' => 0, 'created_at' => Carbon::now()]);
         $this->database()->table('glimpse_highlight_stories')->insert(['highlight_id' => 1, 'story_id' => $id, 'position' => 0]);
-        $this->postJson('/api/stories/seen', 3, ['ids' => [$id]]);
+        $this->postJson('/api/glimpse-stories/seen', 3, ['ids' => [$id]]);
 
-        $included = $this->json($this->get('/api/story-highlights', 3, ['filter' => ['user' => '2']]))['included'];
-        $story = array_values(array_filter($included, fn (array $row): bool => $row['type'] === 'stories'))[0];
+        $included = $this->json($this->get('/api/glimpse-highlights', 3, ['filter' => ['user' => '2']]))['included'];
+        $story = array_values(array_filter($included, fn (array $row): bool => $row['type'] === 'glimpse-stories'))[0];
         $this->assertTrue($story['attributes']['isSeen']);
     }
 }

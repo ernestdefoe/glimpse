@@ -289,7 +289,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
     app
       .request<ApiPayloadSingle>({
         method: 'POST',
-        url: `${app.forum.attribute('apiUrl')}/story-media`,
+        url: `${app.forum.attribute('apiUrl')}/glimpse-media`,
         serialize: (raw: FormData) => raw,
         body,
         errorHandler: () => {},
@@ -326,7 +326,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
     }
 
     app.store
-      .createRecord<Story>('stories')
+      .createRecord<Story>('glimpse-stories')
       .save(data)
       .then((story) => {
         if (this.alsoMoments && this.file && this.audience === 'everyone') this.crossPost(this.file);

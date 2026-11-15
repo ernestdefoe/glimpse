@@ -7,7 +7,7 @@ namespace ErnestDefoe\Glimpse\Follows;
 use Closure;
 use Illuminate\Database\Query\Builder;
 
-/** Without a follow extension: nobody follows anybody. */
+/** Without a follow extension: nobody follows anybody (an empty id list, should anything ask). */
 class NoFollowGraph implements FollowGraph
 {
     public function available(): bool
@@ -17,7 +17,7 @@ class NoFollowGraph implements FollowGraph
 
     public function followedBy(int $userId): Closure
     {
-        return fn (Builder $query) => $query->selectRaw('0')->whereRaw('1 = 0');
+        return fn (Builder $query) => $query->select('id')->from('users')->whereRaw('1 = 0');
     }
 
     public function followersOf(int $userId): Closure

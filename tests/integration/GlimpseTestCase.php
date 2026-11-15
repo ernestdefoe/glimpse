@@ -67,7 +67,7 @@ abstract class GlimpseTestCase extends TestCase
         $stream->rewind();
 
         return $this->send(
-            $this->request('POST', '/api/story-media', ['authenticatedAs' => $as])
+            $this->request('POST', '/api/glimpse-media', ['authenticatedAs' => $as])
                 ->withUploadedFiles(['file' => new UploadedFile($stream, strlen($bytes), UPLOAD_ERR_OK, $name, $claimed)])
         );
     }
@@ -121,12 +121,12 @@ abstract class GlimpseTestCase extends TestCase
     /** @param array<string, mixed> $attributes */
     protected function post(int $as, array $attributes, ?string $mediaId = null): ResponseInterface
     {
-        $data = ['type' => 'stories', 'attributes' => $attributes];
+        $data = ['type' => 'glimpse-stories', 'attributes' => $attributes];
         if ($mediaId !== null) {
-            $data['relationships'] = ['media' => ['data' => ['type' => 'story-media', 'id' => $mediaId]]];
+            $data['relationships'] = ['media' => ['data' => ['type' => 'glimpse-media', 'id' => $mediaId]]];
         }
 
-        return $this->send($this->request('POST', '/api/stories', ['authenticatedAs' => $as, 'json' => ['data' => $data]]));
+        return $this->send($this->request('POST', '/api/glimpse-stories', ['authenticatedAs' => $as, 'json' => ['data' => $data]]));
     }
 
     /** A text story by $as, returning its id. */
@@ -152,7 +152,7 @@ abstract class GlimpseTestCase extends TestCase
      */
     protected function ids(?int $as, array $filter = ['live' => '1']): array
     {
-        $response = $this->get('/api/stories', $as, ['filter' => $filter, 'page' => ['limit' => 100]]);
+        $response = $this->get('/api/glimpse-stories', $as, ['filter' => $filter, 'page' => ['limit' => 100]]);
         $this->assertSame(200, $response->getStatusCode(), substr((string) $response->getBody(), 0, 1500));
 
         return array_map(fn (array $row): int => (int) $row['id'], $this->json($response)['data']);

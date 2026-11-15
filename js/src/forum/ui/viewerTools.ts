@@ -23,3 +23,14 @@ export function preload(story: Story): void {
     img.src = story.mediaUrl()!;
   }
 }
+
+/** Every seen-mark request still on its way; the bar reloads only once they are saved. */
+let seenSaved: Promise<void> = Promise.resolve();
+
+export function trackSeen(request: Promise<unknown>): void {
+  seenSaved = Promise.all([seenSaved, request]).then(() => undefined);
+}
+
+export function whenSeenSaved(): Promise<void> {
+  return seenSaved;
+}

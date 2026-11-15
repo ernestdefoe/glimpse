@@ -7,19 +7,13 @@ namespace ErnestDefoe\Glimpse\Approval;
 use ErnestDefoe\Glimpse\Ids;
 use Flarum\User\User;
 
-/** With ernestdefoe/trust-levels: also hold stories from members below the admin's trust level. */
+/** With ernestdefoe/trust-levels: a member below the admin's trust level is also still new. */
 class TrustLevelApproval extends Approval
 {
-    public function holds(User $actor): bool
+    protected function isNew(User $actor): bool
     {
-        if (parent::holds($actor)) {
-            return true;
-        }
-
         $level = $this->config->approvalTrustLevel();
 
-        return $level > 0
-            && ! $actor->hasPermission('glimpse.skipApproval')
-            && Ids::one($actor->getAttribute('trust_level')) < $level;
+        return parent::isNew($actor) || ($level > 0 && Ids::one($actor->getAttribute('trust_level')) < $level);
     }
 }

@@ -23,7 +23,7 @@ export const bar = {
 
   load(): Promise<void> {
     this.loading ??= app.store
-      .find<Story[]>('stories', { filter: { bar: '1' }, page: { limit: 30, total: 0 } })
+      .find<Story[]>('glimpse-stories', { filter: { bar: '1' }, page: { limit: 30, total: 0 } })
       .then((stories) => this.group(stories as Story[]))
       .catch(failed)
       .finally(() => {

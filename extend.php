@@ -25,6 +25,7 @@ use ErnestDefoe\Glimpse\Console\PruneCommand;
 use ErnestDefoe\Glimpse\Event\Published;
 use ErnestDefoe\Glimpse\Follows\FollowsServiceProvider;
 use ErnestDefoe\Glimpse\GlimpseServiceProvider;
+use ErnestDefoe\Glimpse\Ignores\IgnoresServiceProvider;
 use ErnestDefoe\Glimpse\Http\MediaController;
 use ErnestDefoe\Glimpse\Listener\DeleteMemberData;
 use ErnestDefoe\Glimpse\Listener\QueueNotifications;
@@ -47,10 +48,10 @@ return [
         // The viewer, the create sheet and the pages are chunks in here, fetched when first needed.
         ->jsDirectory(__DIR__.'/js/dist/forum')
         ->css(__DIR__.'/less/forum.less')
-        ->route('/stories', 'glimpse.stories')
-        ->route('/stories/queue', 'glimpse.queue')
-        ->route('/stories/{id:\d+}', 'glimpse.story')
-        ->route('/u/{username}/stories', 'user.glimpse'),
+        ->route('/glimpse', 'glimpse.stories')
+        ->route('/glimpse/queue', 'glimpse.queue')
+        ->route('/glimpse/{id:\d+}', 'glimpse.story')
+        ->route('/u/{username}/glimpse', 'user.glimpse'),
 
     (new Extend\Frontend('admin'))
         ->js(__DIR__.'/js/dist/admin.js'),
@@ -92,7 +93,8 @@ return [
         ->addFilter(Search\StorySearcher::class, Search\Filter\LiveFilter::class)
         ->addFilter(Search\StorySearcher::class, Search\Filter\AuthorFilter::class)
         ->addFilter(Search\StorySearcher::class, Search\Filter\StatusFilter::class)
-        ->addFilter(Search\StorySearcher::class, Search\Filter\ReportedFilter::class),
+        ->addFilter(Search\StorySearcher::class, Search\Filter\ReportedFilter::class)
+        ->addFilter(Search\StorySearcher::class, Search\Filter\FollowingFilter::class),
 
     (new Extend\ServiceProvider())
         ->register(GlimpseServiceProvider::class),
@@ -101,13 +103,12 @@ return [
     (new Extend\Conditional())
         ->whenExtensionEnabled('ianm-follow-users', fn (): array => [
             (new Extend\ServiceProvider())->register(FollowsServiceProvider::class),
-            (new Extend\SearchDriver(DatabaseSearchDriver::class))
-                ->addFilter(Search\StorySearcher::class, Search\Filter\FollowingFilter::class),
         ])
         ->whenExtensionEnabled('flarum-suspend', fn (): array => [
             (new Extend\ModelVisibility(Story::class))->scope(HideSuspendedAuthors::class),
         ])
         ->whenExtensionEnabled('fof-ignore-users', fn (): array => [
+            (new Extend\ServiceProvider())->register(IgnoresServiceProvider::class),
             (new Extend\ModelVisibility(Story::class))->scope(HideFromIgnored::class),
         ])
         ->whenExtensionEnabled('ernestdefoe-trust-levels', fn (): array => [

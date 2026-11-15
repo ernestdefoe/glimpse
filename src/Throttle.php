@@ -14,7 +14,7 @@ use Psr\Http\Message\ServerRequestInterface;
  */
 class Throttle
 {
-    private const ROUTES = ['stories.create', 'story-media.upload'];
+    private const ROUTES = ['glimpse-stories.create', 'glimpse-media.upload'];
 
     public function __construct(private readonly Config $config)
     {
@@ -34,7 +34,7 @@ class Throttle
 
         $since = Carbon::now()->subSeconds($seconds);
 
-        return $request->getAttribute('routeName') === 'stories.create'
+        return $request->getAttribute('routeName') === 'glimpse-stories.create'
             ? Story::query()->where('user_id', $actor->id)->where('created_at', '>', $since)->exists()
             : StoryMedia::query()->where('user_id', $actor->id)->where('created_at', '>', $since)->exists();
     }

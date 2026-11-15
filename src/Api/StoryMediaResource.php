@@ -22,9 +22,9 @@ use Tobyz\JsonApiServer\Context as BaseContext;
 use function Tobyz\JsonApiServer\json_api_response;
 
 /**
- * The `story-media` type: an upload, before it is attached to a story.
+ * The `glimpse-media` type: an upload, before it is attached to a story.
  *
- * POST /api/story-media   multipart `file`. Returns the cleaned upload (its URL serves the preview).
+ * POST /api/glimpse-media   multipart `file`. Returns the cleaned upload (its URL serves the preview).
  *
  * A member only ever reaches their own uploads, which is also what keeps a story from attaching
  * someone else's media through `relationships.media`.
@@ -42,7 +42,7 @@ class StoryMediaResource extends AbstractDatabaseResource
 
     public function type(): string
     {
-        return 'story-media';
+        return 'glimpse-media';
     }
 
     public function model(): string

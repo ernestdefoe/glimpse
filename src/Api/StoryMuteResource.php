@@ -18,11 +18,11 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
- * The `story-mutes` type: the people whose stories a member chose not to see in their bar.
+ * The `glimpse-mutes` type: the people whose stories a member chose not to see in their bar.
  *
- * GET    /api/story-mutes         the actor's own
- * POST   /api/story-mutes         {relationships.mutedUser}
- * DELETE /api/story-mutes/{id}
+ * GET    /api/glimpse-mutes         the actor's own
+ * POST   /api/glimpse-mutes         {relationships.mutedUser}
+ * DELETE /api/glimpse-mutes/{id}
  *
  * @extends AbstractDatabaseResource<StoryMute>
  */
@@ -34,7 +34,7 @@ class StoryMuteResource extends AbstractDatabaseResource
 
     public function type(): string
     {
-        return 'story-mutes';
+        return 'glimpse-mutes';
     }
 
     public function model(): string

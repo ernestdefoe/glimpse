@@ -101,19 +101,19 @@ class CreateTest extends GlimpseTestCase
         $this->assertNull($story->expires_at);
 
         // Invisible to everyone but its author and moderators.
-        $this->assertSame(404, $this->get("/api/stories/$id", 4)->getStatusCode());
-        $this->assertSame(200, $this->get("/api/stories/$id", 2)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$id", 2)->getStatusCode());
         $this->assertSame([$id], $this->ids(5, ['status' => 'pending']));
 
         // The author can't approve their own; a moderator can.
-        $approve = fn (int $as) => $this->send($this->request('PATCH', "/api/stories/$id", ['authenticatedAs' => $as, 'json' => ['data' => ['type' => 'stories', 'id' => (string) $id, 'attributes' => ['status' => 'live']]]]));
+        $approve = fn (int $as) => $this->send($this->request('PATCH', "/api/glimpse-stories/$id", ['authenticatedAs' => $as, 'json' => ['data' => ['type' => 'glimpse-stories', 'id' => (string) $id, 'attributes' => ['status' => 'live']]]]));
         $this->assertSame(403, $approve(2)->getStatusCode());
         $this->assertSame(200, $approve(5)->getStatusCode());
 
         $story->refresh();
         $this->assertSame('live', $story->status->value);
         $this->assertNotNull($story->expires_at);
-        $this->assertSame(200, $this->get("/api/stories/$id", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
     }
 
     #[Test]
@@ -128,16 +128,16 @@ class CreateTest extends GlimpseTestCase
     public function a_moderator_can_hide_and_restore_and_the_author_or_a_moderator_can_delete(): void
     {
         $id = $this->text(2);
-        $patch = fn (int $as, string $status) => $this->send($this->request('PATCH', "/api/stories/$id", ['authenticatedAs' => $as, 'json' => ['data' => ['type' => 'stories', 'id' => (string) $id, 'attributes' => ['status' => $status]]]]));
+        $patch = fn (int $as, string $status) => $this->send($this->request('PATCH', "/api/glimpse-stories/$id", ['authenticatedAs' => $as, 'json' => ['data' => ['type' => 'glimpse-stories', 'id' => (string) $id, 'attributes' => ['status' => $status]]]]));
 
         $this->assertSame(200, $patch(5, 'hidden')->getStatusCode());
-        $this->assertSame(404, $this->get("/api/stories/$id", 4)->getStatusCode());
-        $this->assertSame(200, $this->get("/api/stories/$id", 2)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$id", 2)->getStatusCode());
         $this->assertSame(200, $patch(5, 'live')->getStatusCode());
-        $this->assertSame(200, $this->get("/api/stories/$id", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
 
-        $this->assertSame(403, $this->send($this->request('DELETE', "/api/stories/$id", ['authenticatedAs' => 4]))->getStatusCode());
-        $this->assertSame(204, $this->send($this->request('DELETE', "/api/stories/$id", ['authenticatedAs' => 2]))->getStatusCode());
+        $this->assertSame(403, $this->send($this->request('DELETE', "/api/glimpse-stories/$id", ['authenticatedAs' => 4]))->getStatusCode());
+        $this->assertSame(204, $this->send($this->request('DELETE', "/api/glimpse-stories/$id", ['authenticatedAs' => 2]))->getStatusCode());
         $this->assertSame(0, Story::query()->count());
     }
 

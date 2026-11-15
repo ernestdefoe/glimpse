@@ -21,7 +21,7 @@ class EngagementTest extends GlimpseTestCase
         $mine = $this->text(4);
         $pending = $this->insert(2, ['status' => 'pending', 'expires_at' => null]);
 
-        $seen = fn (int $as, array $ids) => $this->postJson('/api/stories/seen', $as, ['ids' => $ids]);
+        $seen = fn (int $as, array $ids) => $this->postJson('/api/glimpse-stories/seen', $as, ['ids' => $ids]);
         $this->assertSame(204, $seen(4, [$theirs, $members, $mine, $pending, 999, 'x'])->getStatusCode());
         $this->assertSame(204, $seen(4, [$theirs])->getStatusCode());
 
@@ -30,16 +30,16 @@ class EngagementTest extends GlimpseTestCase
         $this->assertSame(1, Story::query()->findOrFail($theirs)->view_count);
         $this->assertSame(0, Story::query()->findOrFail($mine)->view_count);
 
-        $flags = $this->json($this->get("/api/stories/$theirs", 4))['data']['attributes'];
+        $flags = $this->json($this->get("/api/glimpse-stories/$theirs", 4))['data']['attributes'];
         $this->assertTrue($flags['isSeen']);
-        $this->assertFalse($this->json($this->get("/api/stories/$theirs", 3))['data']['attributes']['isSeen']);
+        $this->assertFalse($this->json($this->get("/api/glimpse-stories/$theirs", 3))['data']['attributes']['isSeen']);
     }
 
     #[Test]
     public function reactions_are_set_changed_and_cleared_and_counted(): void
     {
         $id = $this->text(2);
-        $react = fn (int $as, ?string $reaction) => $this->postJson("/api/stories/$id/reaction", $as, ['reaction' => $reaction]);
+        $react = fn (int $as, ?string $reaction) => $this->postJson("/api/glimpse-stories/$id/reaction", $as, ['reaction' => $reaction]);
 
         $response = $react(3, '🔥');
         $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
@@ -64,18 +64,18 @@ class EngagementTest extends GlimpseTestCase
         $id = $this->insert(2);
 
         $this->assertSame(['👍', '👎'], $this->json($this->get('/api', 3))['data']['attributes']['glimpseReactions']);
-        $this->assertSame(422, $this->postJson("/api/stories/$id/reaction", 3, ['reaction' => '❤️'])->getStatusCode());
-        $this->assertSame(200, $this->postJson("/api/stories/$id/reaction", 3, ['reaction' => '👎'])->getStatusCode());
+        $this->assertSame(422, $this->postJson("/api/glimpse-stories/$id/reaction", 3, ['reaction' => '❤️'])->getStatusCode());
+        $this->assertSame(200, $this->postJson("/api/glimpse-stories/$id/reaction", 3, ['reaction' => '👎'])->getStatusCode());
     }
 
     #[Test]
     public function only_the_author_and_moderators_see_who_saw_it(): void
     {
         $id = $this->text(2);
-        $this->postJson('/api/stories/seen', 3, ['ids' => [$id]]);
-        $this->postJson("/api/stories/$id/reaction", 4, ['reaction' => '❤️']);
+        $this->postJson('/api/glimpse-stories/seen', 3, ['ids' => [$id]]);
+        $this->postJson("/api/glimpse-stories/$id/reaction", 4, ['reaction' => '❤️']);
 
-        $list = fn (?int $as) => $this->get('/api/story-views', $as, ['filter' => ['story' => (string) $id], 'include' => 'user']);
+        $list = fn (?int $as) => $this->get('/api/glimpse-views', $as, ['filter' => ['story' => (string) $id], 'include' => 'user']);
         $this->assertSame(403, $list(3)->getStatusCode());
         $this->assertSame(401, $list(null)->getStatusCode());
 
@@ -85,7 +85,7 @@ class EngagementTest extends GlimpseTestCase
         $this->assertSame(200, $list(5)->getStatusCode());
 
         // The counts ride on the story for the same people.
-        $this->assertArrayHasKey('viewCount', $this->json($this->get("/api/stories/$id", 2))['data']['attributes']);
-        $this->assertArrayNotHasKey('viewCount', $this->json($this->get("/api/stories/$id", 3))['data']['attributes']);
+        $this->assertArrayHasKey('viewCount', $this->json($this->get("/api/glimpse-stories/$id", 2))['data']['attributes']);
+        $this->assertArrayNotHasKey('viewCount', $this->json($this->get("/api/glimpse-stories/$id", 3))['data']['attributes']);
     }
 }

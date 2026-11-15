@@ -23,15 +23,15 @@ use Laminas\Diactoros\Response\EmptyResponse;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
- * The `stories` JSON:API type. Listing goes through Search\StorySearcher (filters: bar, live, author,
+ * The `glimpse-stories` JSON:API type. Listing goes through Search\StorySearcher (filters: bar, live, author,
  * status, reported); every other read goes through scope(), which is the same visibility rule plus the
  * same per-viewer flags.
  *
- * GET    /api/stories               POST /api/stories            (create; media via relationships.media)
- * GET    /api/stories/{id}          PATCH /api/stories/{id}      (moderators: status)
- * DELETE /api/stories/{id}          (author or moderator)
- * POST   /api/stories/seen          {"ids": [..]}  marks stories seen, 204
- * POST   /api/stories/{id}/reaction {"reaction": "❤️" | null}
+ * GET    /api/glimpse-stories               POST /api/glimpse-stories            (create; media via relationships.media)
+ * GET    /api/glimpse-stories/{id}          PATCH /api/glimpse-stories/{id}      (moderators: status)
+ * DELETE /api/glimpse-stories/{id}          (author or moderator)
+ * POST   /api/glimpse-stories/seen          {"ids": [..]}  marks stories seen, 204
+ * POST   /api/glimpse-stories/{id}/reaction {"reaction": "❤️" | null}
  *
  * @extends AbstractDatabaseResource<Story>
  */
@@ -49,7 +49,7 @@ class StoryResource extends AbstractDatabaseResource
 
     public function type(): string
     {
-        return 'stories';
+        return 'glimpse-stories';
     }
 
     public function model(): string
@@ -234,7 +234,7 @@ class StoryResource extends AbstractDatabaseResource
                 ->type('users')
                 ->includable(),
             Schema\Relationship\ToOne::make('media')
-                ->type('story-media')
+                ->type('glimpse-media')
                 ->writableOnCreate()
                 ->visible(false),
             Schema\Relationship\ToMany::make('mentionedUsers')

@@ -10,8 +10,8 @@ use Flarum\Search\Filter\FilterInterface;
 use Flarum\Search\SearchState;
 
 /**
- * `filter[following]`: stories by people the actor follows. Registered only while ianm/follow-users
- * is enabled; for a guest, nothing matches.
+ * `filter[following]`: stories by people the actor follows. For a guest, or on a forum without a follow
+ * extension, nothing matches.
  *
  * @implements FilterInterface<DatabaseSearchState>
  */
@@ -30,7 +30,7 @@ class FollowingFilter implements FilterInterface
     {
         $actor = $state->getActor();
 
-        if ($actor->isGuest()) {
+        if ($actor->isGuest() || ! $this->follows->available()) {
             $state->getQuery()->whereRaw('1 = 0');
 
             return;

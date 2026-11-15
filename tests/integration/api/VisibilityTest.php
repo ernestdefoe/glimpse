@@ -29,9 +29,9 @@ class VisibilityTest extends GlimpseTestCase
         $this->assertEqualsCanonicalizing([$everyone, $members, $followers], $this->ids(5));
 
         // A single story asks the same question.
-        $this->assertSame(404, $this->get("/api/stories/$followers", 4)->getStatusCode());
-        $this->assertSame(404, $this->get("/api/stories/$members")->getStatusCode());
-        $this->assertSame(200, $this->get("/api/stories/$followers", 3)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$followers", 4)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$members")->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$followers", 3)->getStatusCode());
     }
 
     #[Test]
@@ -43,7 +43,7 @@ class VisibilityTest extends GlimpseTestCase
 
         $this->assertSame([], $this->ids(null));
         $this->assertSame([$mine], $this->ids(2));
-        $this->assertSame(404, $this->get("/api/stories/$theirs", 2)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$theirs", 2)->getStatusCode());
     }
 
     #[Test]
@@ -58,27 +58,27 @@ class VisibilityTest extends GlimpseTestCase
         // Neither is live any more...
         $this->assertSame([], $this->ids(4));
         // ...but the kept one can still be opened from its highlight, and the other can't.
-        $this->assertSame(200, $this->get("/api/stories/$kept", 4)->getStatusCode());
-        $this->assertSame(404, $this->get("/api/stories/$gone", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$kept", 4)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$gone", 4)->getStatusCode());
     }
 
     #[Test]
     public function muted_people_leave_your_bar_but_their_stories_still_open(): void
     {
         $id = $this->text(2);
-        $mute = $this->send($this->request('POST', '/api/story-mutes', ['authenticatedAs' => 4, 'json' => ['data' => ['type' => 'story-mutes', 'relationships' => ['mutedUser' => ['data' => ['type' => 'users', 'id' => '2']]]]]]));
+        $mute = $this->send($this->request('POST', '/api/glimpse-mutes', ['authenticatedAs' => 4, 'json' => ['data' => ['type' => 'glimpse-mutes', 'relationships' => ['mutedUser' => ['data' => ['type' => 'users', 'id' => '2']]]]]]));
         $this->assertSame(201, $mute->getStatusCode(), (string) $mute->getBody());
 
         $this->assertSame([], $this->ids(4, ['bar' => '1']));
         $this->assertSame([], $this->ids(4));
-        $this->assertSame(200, $this->get("/api/stories/$id", 4)->getStatusCode());
+        $this->assertSame(200, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
         $this->assertSame([$id], $this->ids(3, ['bar' => '1']));
 
         // Muting yourself, or twice, is refused; unmuting works.
-        $self = $this->send($this->request('POST', '/api/story-mutes', ['authenticatedAs' => 4, 'json' => ['data' => ['type' => 'story-mutes', 'relationships' => ['mutedUser' => ['data' => ['type' => 'users', 'id' => '4']]]]]]));
+        $self = $this->send($this->request('POST', '/api/glimpse-mutes', ['authenticatedAs' => 4, 'json' => ['data' => ['type' => 'glimpse-mutes', 'relationships' => ['mutedUser' => ['data' => ['type' => 'users', 'id' => '4']]]]]]));
         $this->assertSame(422, $self->getStatusCode());
         $muteId = $this->json($mute)['data']['id'];
-        $this->assertSame(204, $this->send($this->request('DELETE', "/api/story-mutes/$muteId", ['authenticatedAs' => 4]))->getStatusCode());
+        $this->assertSame(204, $this->send($this->request('DELETE', "/api/glimpse-mutes/$muteId", ['authenticatedAs' => 4]))->getStatusCode());
         $this->assertSame([$id], $this->ids(4, ['bar' => '1']));
     }
 
@@ -94,7 +94,7 @@ class VisibilityTest extends GlimpseTestCase
             $this->insert($id, ['created_at' => Carbon::now()->subMinutes(100 - $n)]);
         }
 
-        $response = $this->get('/api/stories', 4, ['filter' => ['bar' => '1'], 'page' => ['limit' => 100]]);
+        $response = $this->get('/api/glimpse-stories', 4, ['filter' => ['bar' => '1'], 'page' => ['limit' => 100]]);
         $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
         $authors = array_unique(array_map(fn (array $row): int => (int) $row['relationships']['user']['data']['id'], $this->json($response)['data']));
         $this->assertCount(30, $authors);

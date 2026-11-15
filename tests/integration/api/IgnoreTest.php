@@ -21,7 +21,7 @@ class IgnoreTest extends GlimpseTestCase
         $this->database()->table('ignored_user')->insert(['user_id' => 2, 'ignored_user_id' => 4, 'ignored_at' => \Carbon\Carbon::now()]);
 
         $this->assertSame([], $this->ids(4));
-        $this->assertSame(404, $this->get("/api/stories/$id", 4)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$id", 4)->getStatusCode());
         $this->assertSame([$id], $this->ids(3));
         $this->assertSame([$id], $this->ids(5), 'Moderators are never hidden from.');
     }
@@ -34,5 +34,12 @@ class IgnoreTest extends GlimpseTestCase
         $this->database()->table('ignored_user')->insert(['user_id' => 2, 'ignored_user_id' => 4, 'ignored_at' => \Carbon\Carbon::now()]);
 
         $this->assertSame([$id], $this->ids(4));
+    }
+
+    #[Test]
+    public function without_a_follow_extension_the_following_filter_matches_nothing(): void
+    {
+        $this->insert(2);
+        $this->assertSame([], $this->ids(3, ['live' => '1', 'following' => '1']));
     }
 }

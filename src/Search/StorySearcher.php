@@ -12,7 +12,7 @@ use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * `GET /api/stories`: the stories the actor may see, with what they mean to the actor (Flags), and the
+ * `GET /api/glimpse-stories`: the stories the actor may see, with what they mean to the actor (Flags), and the
  * author and media eager-loaded, so a page costs the same few queries whatever its length.
  * Filters: bar, live, author, status.
  */

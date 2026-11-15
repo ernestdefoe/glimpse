@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ErnestDefoe\Glimpse\Access;
 
 use ErnestDefoe\Glimpse\Config;
+use ErnestDefoe\Glimpse\Ignores\IgnoreGraph;
 use ErnestDefoe\Glimpse\Story;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 
 /**
  * With fof/ignore-users (registered only while it's enabled) and the admin's switch on: an author who
@@ -16,7 +16,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  */
 class HideFromIgnored
 {
-    public function __construct(private readonly Config $config)
+    public function __construct(private readonly Config $config, private readonly IgnoreGraph $ignores)
     {
     }
 
@@ -27,8 +27,6 @@ class HideFromIgnored
             return;
         }
 
-        $query->whereNotIn('glimpse_stories.user_id', fn (QueryBuilder $ignoring) => $ignoring->select('user_id')
-            ->from('ignored_user')
-            ->where('ignored_user_id', $actor->id));
+        $query->whereNotIn('glimpse_stories.user_id', $this->ignores->ignoring($actor->id));
     }
 }

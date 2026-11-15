@@ -41,7 +41,7 @@ class PruneTest extends GlimpseTestCase
         $expired = (int) $this->json($this->post(2, ['kind' => 'photo'], $expiredMedia))['data']['id'];
         $kept = (int) $this->json($this->post(2, ['kind' => 'photo'], $keptMedia))['data']['id'];
         $live = (int) $this->json($this->post(2, ['kind' => 'photo'], $liveMedia))['data']['id'];
-        $this->postJson('/api/stories/seen', 3, ['ids' => [$expired]]);
+        $this->postJson('/api/glimpse-stories/seen', 3, ['ids' => [$expired]]);
 
         Story::query()->whereIn('id', [$expired, $kept])->update(['expires_at' => Carbon::now()->subHour()]);
         StoryMedia::query()->where('id', $unused)->update(['created_at' => Carbon::now()->subDays(2)]);
@@ -74,7 +74,7 @@ class PruneTest extends GlimpseTestCase
         $id = (int) $this->json($this->post(2, ['kind' => 'photo'], $media))['data']['id'];
         $path = StoryMedia::query()->findOrFail((int) $media)->path;
 
-        $this->send($this->request('DELETE', "/api/stories/$id", ['authenticatedAs' => 2]));
+        $this->send($this->request('DELETE', "/api/glimpse-stories/$id", ['authenticatedAs' => 2]));
         $this->assertFalse($disk->exists($path));
         $this->assertSame(0, StoryMedia::query()->count());
 

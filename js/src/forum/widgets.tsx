@@ -42,6 +42,8 @@ function fof<T>(path: string): T | undefined {
 }
 
 function registerFof(): void {
+  if (!has('fof-forum-widgets-core')) return;
+  // FoF's classes come from the module registry (flarum.reg), never a build-time import of FoF.
   const Widgets = fof<WidgetsExtender>('common/extend/Widgets');
   const WidgetBase = fof<WidgetBaseClass>('common/components/Widget');
   const host = app as unknown as WidgetHost;

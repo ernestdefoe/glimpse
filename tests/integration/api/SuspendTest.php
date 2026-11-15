@@ -24,7 +24,7 @@ class SuspendTest extends GlimpseTestCase
         $this->database()->table('users')->where('id', 3)->update(['suspended_until' => Carbon::now()->subDay()]);
 
         $this->assertSame([$ended], $this->ids(4));
-        $this->assertSame(404, $this->get("/api/stories/$suspended", 4)->getStatusCode());
+        $this->assertSame(404, $this->get("/api/glimpse-stories/$suspended", 4)->getStatusCode());
         // Moderators still see it, to deal with it.
         $this->assertEqualsCanonicalizing([$suspended, $ended], $this->ids(5));
     }
