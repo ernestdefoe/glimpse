@@ -1,23 +1,27 @@
 # Glimpse
 
-Stories for Flarum 2: short photo, video and text posts that disappear after a day, shown as a row of avatar rings above the discussion list and played full screen.
+Stories for Flarum 2, called Glimpses on your forum: short photo, video and text posts that disappear after a day, shown as a row of avatar rings above the discussion list and played full screen.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg) [![Latest Stable Version](https://img.shields.io/packagist/v/ernestdefoe/glimpse.svg)](https://packagist.org/packages/ernestdefoe/glimpse)
 
 ![The story bar](screenshots/bar.png)
 
 - **Post a story.** A photo, a short video, or a few words on one of eight colors. Add a caption (mention people with @username), one link, and pick who can see it: everyone, signed-in members, or your followers (with [Follow Users](https://github.com/imorland/follow-users)). It disappears after 24 hours; the admin can pick 6, 12, 48 hours or a week.
-- **The story bar.** New stories first, people you follow next, then the newest. Seen rings turn grey. Your own ring comes first, with a plus to add another.
+- **The bar.** New stories first, people you follow next, then the newest. Seen rings turn grey. Your own ring comes first, with a plus to add another.
 - **The viewer.** Full screen on phones, a 9:16 card on desktop. Tap the right side to go on, the left to go back, hold to pause, swipe down to close, swipe sideways to move to the next person. Arrow keys, Space and Esc work too. Progress bars run along the top, videos play for their length, and the next story loads while you watch.
 - **React and reply.** Quick reactions (choose up to eight emoji, or just one for a single like button). Replies go to the author privately, through [Parley](https://ernestdefoe.online/downloads/f/parley) or Flarum's own Messages.
 - **Seen by.** Only the author (and moderators) can see who saw a story and how they reacted.
 - **Highlights.** Keep stories past their time in named collections on your profile.
-- **The Stories page** at `/glimpse` lists every live story you can see, with a Following filter. Each profile has a Stories tab.
+- **The Glimpses page** at `/glimpse` lists every live story you can see, with a Following filter. Each profile has a Glimpses tab.
 - **Moderation.** Report a story; moderators see reports and waiting stories at `/glimpse/queue`, and can hide or delete any story. Hold new members' stories for approval by post count, days since joining, or a [Trust Levels](https://ernestdefoe.online/downloads/f/trust-levels) level. Anyone can mute a person's stories. Suspended members' stories disappear while the suspension lasts, and with [FoF Ignore Users](https://github.com/FriendsOfFlarum/ignore-users) a member's stories can be hidden from the people they ignore.
 - **Widgets.** The story bar in [Bespoke](https://ernestdefoe.online/downloads/f/bespoke)'s zones, as a [Page Builder](https://ernestdefoe.online/downloads/f/page-builder) block and in [FoF Widgets](https://github.com/FriendsOfFlarum/forum-widgets-core).
 - **Also post to Moments.** With [Moments](https://ernestdefoe.online/downloads/f/moments), a photo or video story can be posted there too.
 
 ![The viewer](screenshots/viewer.png)
+
+![The Glimpses page](screenshots/page.png)
+
+![A new text story](screenshots/create.png)
 
 ## Private and safe
 

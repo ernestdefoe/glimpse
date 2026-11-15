@@ -22,7 +22,7 @@ ernestdefoe-glimpse:
     placement:
       index: On the main discussion list
       index_tags: On the discussion list and tag pages
-      page: Only on the Stories page
+      page: Only on the Glimpses page
       none: Nowhere (widgets only)
     bar_order: Order of the story bar
     bar_order_help: Members always see their own story first.
@@ -88,15 +88,15 @@ ernestdefoe-glimpse:
         {url}
 
   forum:
-    load_failed: Stories couldn't load. Please try again.
+    load_failed: Glimpses couldn't load. Please try again.
     nav:
-      stories: Stories
-      queue: Stories to review
+      stories: Glimpses
+      queue: Glimpses to review
     widget:
-      title: Stories
+      title: Glimpses
     bar:
-      label: Stories
-      title: Stories
+      label: Glimpses
+      title: Glimpses
       see_all: See all
       your_story: Your story
       add: Add to your story
@@ -199,8 +199,8 @@ ernestdefoe-glimpse:
       delete: "Delete the {title} highlight"
       delete_confirm: "Delete the {title} highlight? The stories in it will disappear when their time runs out."
     page:
-      title: Stories
-      intro: "{count, plural, one {What members are sharing. Stories disappear after # hour.} other {What members are sharing. Stories disappear after # hours.}}"
+      title: Glimpses
+      intro: "{count, plural, one {What members are sharing. Glimpses disappear after # hour.} other {What members are sharing. Glimpses disappear after # hours.}}"
       add: Add a story
       all: All
       following: Following
@@ -209,14 +209,14 @@ ernestdefoe-glimpse:
       open: "Open {name}'s story"
       gone: That story is no longer available.
     profile:
-      live: Stories now
+      live: Glimpses now
       empty: "{name} has no stories right now."
       empty_own: You have no stories right now.
       pending: Waiting for approval
       hidden: Hidden by a moderator
       kept: Kept in a highlight
     queue:
-      title: Stories to review
+      title: Glimpses to review
       pending: Waiting for approval
       reported: Reported
       approve: Approve
