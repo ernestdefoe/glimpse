@@ -6,7 +6,7 @@ import classList from 'flarum/common/utils/classList';
 import type User from 'flarum/common/models/User';
 import type Mithril from 'mithril';
 import type Story from './models/Story';
-import { onStoriesChanged, t, tx, ui } from './util';
+import { failed, onStoriesChanged, t, tx, ui } from './util';
 
 export interface Ring {
   user: User;
@@ -27,7 +27,7 @@ export const bar = {
     this.loading ??= app.store
       .find<Story[]>('stories', { filter: { bar: '1' }, page: { limit: 100, total: 0 } } as any)
       .then((stories) => this.group(stories as Story[]))
-      .catch(() => {})
+      .catch(failed)
       .finally(() => {
         this.loaded = true;
         this.loading = null;

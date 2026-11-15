@@ -12,6 +12,7 @@ use Flarum\Locale\TranslatorInterface;
 use Flarum\User\User;
 use Intervention\Image\Encoders\GifEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
+use Intervention\Image\Exceptions\RuntimeException as ImageException;
 use Intervention\Image\ImageManager;
 use Psr\Http\Message\UploadedFileInterface;
 
@@ -112,7 +113,8 @@ class Uploader
 
         try {
             $image = $this->images->read($bytes);
-        } catch (\Throwable) {
+        } catch (ImageException) {
+            // Not a picture the decoder can read, whatever its first bytes said.
             $this->fail('bad_type');
         }
 

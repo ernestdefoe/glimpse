@@ -184,7 +184,10 @@ export default class Viewer extends Component<ViewerAttrs> {
     if (!this.seen.size) return;
     const ids = [...this.seen].map(Number);
     this.seen.clear();
-    app.request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/seen`, body: { ids } }).catch(() => {});
+    // Didn't go through: keep them for the next flush (closing the viewer flushes once more).
+    app
+      .request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/seen`, body: { ids }, errorHandler: () => {} })
+      .catch(() => ids.forEach((id) => this.seen.add(String(id))));
   }
 
   // ---------- playback ----------
@@ -214,7 +217,14 @@ export default class Viewer extends Component<ViewerAttrs> {
     this.paused = paused;
     this.last = performance.now();
     const video = this.video();
-    if (video) paused ? video.pause() : video.play().catch(() => {});
+    if (video && paused) video.pause();
+    if (video && !paused) {
+      // A browser that won't autoplay leaves the story paused, with the play button showing.
+      video.play().catch(() => {
+        this.paused = true;
+        m.redraw();
+      });
+    }
     m.redraw();
   }
 
@@ -409,7 +419,7 @@ export default class Viewer extends Component<ViewerAttrs> {
         navigator.clipboard
           ?.writeText(app.forum.attribute<string>('baseUrl') + app.route('glimpse.story', { id: story.id() }))
           .then(() => this.say(tx('viewer.copied')))
-          .catch(() => {});
+          .catch(() => this.say(tx('viewer.copy_failed')));
         resume();
         break;
       case 'highlight':

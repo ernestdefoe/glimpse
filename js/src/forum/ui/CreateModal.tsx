@@ -107,20 +107,22 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
 
           <fieldset className="Form-group GlimpseCreate-audience">
             <legend>{t('create.audience')}</legend>
-            {this.audiences().map((audience) => (
-              <label className={classList('GlimpseChip', this.audience === audience && 'is-active')}>
-                <input
-                  type="radio"
-                  name="audience"
-                  value={audience}
-                  checked={this.audience === audience}
-                  onchange={() => {
-                    this.audience = audience;
-                  }}
-                />
-                <i className={classList('fas', AUDIENCE_ICONS[audience])} aria-hidden="true" /> {t(`audience.${audience}`)}
-              </label>
-            ))}
+            <div className="GlimpseCreate-chips">
+              {this.audiences().map((audience) => (
+                <label className={classList('GlimpseChip', this.audience === audience && 'is-active')}>
+                  <input
+                    type="radio"
+                    name="audience"
+                    value={audience}
+                    checked={this.audience === audience}
+                    onchange={() => {
+                      this.audience = audience;
+                    }}
+                  />
+                  <i className={classList('fas', AUDIENCE_ICONS[audience])} aria-hidden="true" /> {t(`audience.${audience}`)}
+                </label>
+              ))}
+            </div>
           </fieldset>
 
           {has('ernestdefoe-moments') && this.kind !== 'text' ? (

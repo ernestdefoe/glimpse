@@ -48,7 +48,7 @@ class Engagement
 
         $now = Carbon::now();
         $this->db->transaction(function () use ($visible, $actor, $now): void {
-            $this->db->table('glimpse_views')->insertOrIgnore(array_map(
+            StoryView::query()->insertOrIgnore(array_map(
                 fn (int $id): array => ['story_id' => $id, 'user_id' => $actor->id, 'viewed_at' => $now],
                 $visible
             ));
@@ -67,9 +67,8 @@ class Engagement
 
         $now = Carbon::now();
         $this->db->transaction(function () use ($actor, $story, $reaction, $now): void {
-            $views = $this->db->table('glimpse_views');
-            $views->insertOrIgnore(['story_id' => $story->id, 'user_id' => $actor->id, 'viewed_at' => $now]);
-            $this->db->table('glimpse_views')
+            StoryView::query()->insertOrIgnore(['story_id' => $story->id, 'user_id' => $actor->id, 'viewed_at' => $now]);
+            StoryView::query()
                 ->where('story_id', $story->id)
                 ->where('user_id', $actor->id)
                 ->update(['reaction' => $reaction, 'reacted_at' => $reaction === null ? null : $now]);
@@ -80,7 +79,7 @@ class Engagement
     /** @param list<int> $ids */
     private function recount(array $ids): void
     {
-        $this->db->table('glimpse_stories')->whereIn('id', $ids)->update([
+        Story::query()->whereIn('id', $ids)->update([
             'view_count' => $this->count(false),
             'reaction_count' => $this->count(true),
         ]);
@@ -89,7 +88,7 @@ class Engagement
     /** A correlated COUNT, as a subquery the UPDATE above compiles (with the table prefix). */
     private function count(bool $reactions): Builder
     {
-        $query = $this->db->table('glimpse_views')
+        $query = StoryView::query()->toBase()
             ->selectRaw('COUNT(*)')
             ->whereColumn('glimpse_views.story_id', 'glimpse_stories.id');
         if ($reactions) {

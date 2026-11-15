@@ -32,7 +32,8 @@ class MediaController implements RequestHandlerInterface
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
         $actor = RequestUtil::getActor($request);
-        $id = Ids::one($request->getQueryParams()['id'] ?? null);
+        $parameters = $request->getAttribute('routeParameters');
+        $id = Ids::one(is_array($parameters) ? ($parameters['id'] ?? null) : null);
 
         $media = StoryMedia::query()->find($id);
         if ($media === null) {
@@ -55,16 +56,21 @@ class MediaController implements RequestHandlerInterface
         $partial = $start > 0 || $end < $size - 1;
 
         if ($partial) {
-            // Only the requested bytes, through a temporary stream (it spills to disk past 2 MB).
+            // Only the requested bytes, through a temporary stream (in memory up to 2 MB).
             $this->skip($source, $start);
-            $target = fopen('php://temp', 'w+b');
-            if ($target === false) {
-                throw new RouteNotFoundException();
+            $body = new Stream('php://temp', 'w+b');
+            for ($left = $end - $start + 1; $left > 0 && ! feof($source);) {
+                $chunk = fread($source, min(65536, $left));
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $body->write($chunk);
+                $left -= strlen($chunk);
             }
-            stream_copy_to_stream($source, $target, $end - $start + 1);
             fclose($source);
-            rewind($target);
-            $source = $target;
+            $body->rewind();
+        } else {
+            $body = new Stream($source);
         }
 
         $headers = [
@@ -78,7 +84,7 @@ class MediaController implements RequestHandlerInterface
             $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
         }
 
-        return new Response(new Stream($source), $partial ? 206 : 200, $headers);
+        return new Response($body, $partial ? 206 : 200, $headers);
     }
 
     /** Moves a stream to $offset: a seek where the driver allows it, otherwise reading past the bytes. */

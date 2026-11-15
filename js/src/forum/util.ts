@@ -11,6 +11,11 @@ export const tx = (key: string, params: Record<string, unknown> = {}): string =>
 
 export const has = (extension: string): boolean => extension in ((globalThis as any).flarum?.extensions || {});
 
+/** A request that didn't come back: say so, in words, instead of failing silently. */
+export function failed(): void {
+  app.alerts.show({ type: 'error' }, tx('load_failed'));
+}
+
 /** Everything that changes stories (posting, deleting, a moderator's decision) calls this, and the bar reloads. */
 const listeners = new Set<() => void>();
 export function onStoriesChanged(listener: () => void): () => void {

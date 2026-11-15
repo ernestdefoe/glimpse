@@ -31,8 +31,11 @@ class Cleanup
         $paths = $this->paths($mediaIds);
 
         $this->db->transaction(function () use ($storyIds, $mediaIds): void {
-            foreach (['glimpse_views', 'glimpse_mentions', 'glimpse_reports', 'glimpse_highlight_stories'] as $table) {
-                $this->db->table($table)->whereIn('story_id', $storyIds)->delete();
+            StoryView::query()->whereIn('story_id', $storyIds)->delete();
+            StoryReport::query()->whereIn('story_id', $storyIds)->delete();
+            // Pivot tables: no model of their own.
+            foreach (['glimpse_mentions', 'glimpse_highlight_stories'] as $pivot) {
+                $this->db->table($pivot)->whereIn('story_id', $storyIds)->delete();
             }
             Story::query()->whereIn('id', $storyIds)->delete();
             StoryMedia::query()->whereIn('id', $mediaIds)->delete();
@@ -71,11 +74,13 @@ class Cleanup
         $this->uploads(Ids::of(StoryMedia::query()->where('user_id', $userId)->pluck('id')));
         $this->storage->delete($files);
         $this->db->transaction(function () use ($userId): void {
-            $this->db->table('glimpse_highlights')->where('user_id', $userId)->delete();
-            $this->db->table('glimpse_mutes')->where('user_id', $userId)->orWhere('muted_user_id', $userId)->delete();
-            $this->db->table('glimpse_views')->where('user_id', $userId)->delete();
+            $highlights = Ids::of(Highlight::query()->where('user_id', $userId)->pluck('id'));
+            $this->db->table('glimpse_highlight_stories')->whereIn('highlight_id', $highlights)->delete();
+            Highlight::query()->whereIn('id', $highlights)->delete();
+            StoryMute::query()->where('user_id', $userId)->orWhere('muted_user_id', $userId)->delete();
+            StoryView::query()->where('user_id', $userId)->delete();
+            StoryReport::query()->where('user_id', $userId)->delete();
             $this->db->table('glimpse_mentions')->where('user_id', $userId)->delete();
-            $this->db->table('glimpse_reports')->where('user_id', $userId)->delete();
         });
     }
 

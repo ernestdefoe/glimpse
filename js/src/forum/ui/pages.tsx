@@ -10,7 +10,7 @@ import type Mithril from 'mithril';
 import type Story from '../models/Story';
 import type StoryHighlight from '../models/StoryHighlight';
 import type StoryReport from '../models/StoryReport';
-import { onStoriesChanged, storiesChanged, t, tx } from '../util';
+import { failed, onStoriesChanged, storiesChanged, t, tx } from '../util';
 import { IndexSidebar, PageStructure } from './core';
 import { openViewer } from './Viewer';
 import { openCreate } from './open';
@@ -121,7 +121,7 @@ export class StoriesPage extends Page {
         this.stories = offset ? [...this.stories, ...stories] : [...stories];
         this.more = !!stories.payload?.links?.next;
       })
-      .catch(() => {})
+      .catch(failed)
       .finally(() => {
         this.loading = false;
         m.redraw();
@@ -201,12 +201,10 @@ export class QueuePage extends Page {
         : app.store
             .find<StoryReport[]>('story-reports', { include: 'story,story.user,user', page: { limit: 50, total: 0 } } as any)
             .then((r) => (this.reports = [...(r as StoryReport[])]));
-    request
-      .catch(() => {})
-      .finally(() => {
-        this.loading = false;
-        m.redraw();
-      });
+    request.catch(failed).finally(() => {
+      this.loading = false;
+      m.redraw();
+    });
   }
 
   view() {
@@ -374,7 +372,7 @@ export async function userStoriesPage(): Promise<any> {
           this.highlights = [...(highlights as StoryHighlight[])];
           this.stories = [...(stories as Story[])];
         })
-        .catch(() => {})
+        .catch(failed)
         .finally(() => {
           this.loading = false;
           m.redraw();

@@ -13,10 +13,10 @@ use ErnestDefoe\Glimpse\Notification\NewStoryBlueprint;
 use ErnestDefoe\Glimpse\Notification\StoryMentionedBlueprint;
 use ErnestDefoe\Glimpse\Story;
 use Flarum\Group\Group;
+use Flarum\Group\Permission;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\Queue\AbstractJob;
 use Flarum\User\User;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 
@@ -37,7 +37,7 @@ class SendStoryNotifications extends AbstractJob
         parent::__construct();
     }
 
-    public function handle(NotificationSyncer $notifications, Config $config, Extensions $extensions, ConnectionInterface $db): void
+    public function handle(NotificationSyncer $notifications, Config $config, Extensions $extensions): void
     {
         // The mentioned members' groups too: the visibility rule reads their permissions.
         $story = Story::query()->with(['user', 'mentionedUsers.groups'])->find($this->storyId);
@@ -61,7 +61,7 @@ class SendStoryNotifications extends AbstractJob
         $cap = $config->notifyCap();
 
         // Followers who may view stories at all, found set-wise: no permission lookup per person.
-        $viewerGroups = Ids::of($db->table('group_permission')->where('permission', 'glimpse.view')->pluck('group_id'));
+        $viewerGroups = Ids::of(Permission::query()->where('permission', 'glimpse.view')->pluck('group_id'));
         $everyone = array_intersect($viewerGroups, [Group::GUEST_ID, Group::MEMBER_ID]) !== [];
 
         $followers = User::query()

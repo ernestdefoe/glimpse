@@ -11,7 +11,7 @@ import type Mithril from 'mithril';
 import type Story from '../models/Story';
 import type StoryHighlight from '../models/StoryHighlight';
 import type StoryView from '../models/StoryView';
-import { t, tx } from '../util';
+import { failed, t, tx } from '../util';
 
 interface ClosingAttrs {
   onclose?: () => void;
@@ -55,7 +55,7 @@ export class SeenByModal extends Modal<SeenByAttrs> {
         this.views = offset ? [...this.views, ...views] : [...views];
         this.more = !!views.payload?.links?.next;
       })
-      .catch(() => {})
+      .catch(failed)
       .finally(() => {
         this.busy = false;
         m.redraw();

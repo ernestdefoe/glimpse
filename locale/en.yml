@@ -34,7 +34,7 @@ ernestdefoe-glimpse:
       everyone: Everyone who can see stories
       members: Signed-in members
       followers: Followers only
-    ignore_hides: Members someone ignores can't see that person's stories
+    ignore_hides: Hide a member's stories from the people they ignore
     ignore_hides_help: From FoF Ignore Users. People you ignore never appear in your bar either way.
     reactions: Quick reactions
     reactions_help: Up to 8 emoji, separated by spaces. Use one emoji for a single like button.
@@ -88,6 +88,7 @@ ernestdefoe-glimpse:
         {url}
 
   forum:
+    load_failed: Stories couldn't load. Please try again.
     nav:
       stories: Stories
       queue: Stories to review
@@ -132,6 +133,7 @@ ernestdefoe-glimpse:
       reported: Thanks. A moderator will take a look.
       muted: "You won't see {name}'s stories in your bar. Unmute them from their profile."
       copied: Link copied
+      copy_failed: The link couldn't be copied.
       highlighted: "Added to {title}"
       hidden: Hidden from everyone but staff and its author
       deleted: Story deleted

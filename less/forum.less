@@ -591,6 +591,9 @@ html:not(#x-glimpse) .GlimpseViewer-link {
     font-size: 19px;
   }
 }
+.GlimpseCreate-preview:not(.GlimpseText) {
+  border: 2px dashed var(--muted-color);
+}
 .GlimpseCreate-placeholder {
   font-size: 40px;
   color: var(--muted-color);
@@ -643,6 +646,15 @@ html:not(#x-glimpse) .GlimpseViewer-link {
   color: var(--alert-error-bg, #d83e3e);
   font-weight: 600;
 }
+.GlimpseCreate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  .GlimpseChip {
+    margin: 0;
+  }
+}
 .GlimpseCreate-swatches {
   display: flex;
   flex-wrap: wrap;
@@ -662,18 +674,9 @@ html:not(#x-glimpse) .GlimpseViewer-link {
   }
 }
 .GlimpseCreate-audience {
-  display: flex;
-  flex-wrap: wrap;
   border: 0;
   margin: 0 0 12px;
   padding: 0;
-
-  legend {
-    flex-basis: 100%;
-  }
-  .GlimpseChip {
-    display: inline-flex;
-  }
 
   legend {
     font-weight: 600;
@@ -728,8 +731,7 @@ html:not(#x-glimpse) .GlimpseViewer-link {
     grid-template-columns: minmax(0, 1fr);
   }
   .GlimpseCreate-preview {
-    width: 100%;
-    max-width: 200px;
+    width: 120px;
     justify-self: center;
   }
   .GlimpseCreate-foot {
