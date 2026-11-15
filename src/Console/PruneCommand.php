@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ErnestDefoe\Glimpse\Console;
 
 use Carbon\Carbon;
-use ErnestDefoe\Glimpse\Media\Storage;
+use ErnestDefoe\Glimpse\Cleanup;
+use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Story;
 use ErnestDefoe\Glimpse\StoryMedia;
 use Flarum\Console\AbstractCommand;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Symfony\Component\Console\Input\InputOption;
@@ -27,7 +27,7 @@ class PruneCommand extends AbstractCommand
 {
     private const CHUNK = 500;
 
-    public function __construct(private readonly Storage $storage, private readonly ConnectionInterface $db)
+    public function __construct(private readonly Cleanup $cleanup)
     {
         parent::__construct();
     }
@@ -45,28 +45,19 @@ class PruneCommand extends AbstractCommand
         $stories = 0;
         $uploads = 0;
 
-        $this->expired()->select(['id', 'media_id'])->chunkById(self::CHUNK, function ($chunk) use ($dry, &$stories): void {
+        // chunkById pages by id, so deleting the chunk it just read never skips a row.
+        $this->expired()->select('id')->chunkById(self::CHUNK, function ($chunk) use ($dry, &$stories): void {
             $stories += $chunk->count();
-            if ($dry) {
-                return;
+            if (! $dry) {
+                $this->cleanup->stories(Ids::of($chunk->pluck('id')));
             }
-            $mediaIds = $chunk->pluck('media_id')->filter()->values()->all();
-            $paths = StoryMedia::query()->whereIn('id', $mediaIds)->pluck('path')->all();
-
-            $this->db->transaction(function () use ($chunk, $mediaIds): void {
-                Story::query()->whereIn('id', $chunk->pluck('id')->all())->delete();
-                StoryMedia::query()->whereIn('id', $mediaIds)->delete();
-            });
-            $this->storage->delete($paths);
         });
 
-        $this->unused()->select(['id', 'path'])->chunkById(self::CHUNK, function ($chunk) use ($dry, &$uploads): void {
+        $this->unused()->select('id')->chunkById(self::CHUNK, function ($chunk) use ($dry, &$uploads): void {
             $uploads += $chunk->count();
-            if ($dry) {
-                return;
+            if (! $dry) {
+                $this->cleanup->uploads(Ids::of($chunk->pluck('id')));
             }
-            StoryMedia::query()->whereIn('id', $chunk->pluck('id')->all())->delete();
-            $this->storage->delete($chunk->pluck('path')->all());
         });
 
         $this->info(($dry ? 'Would delete' : 'Deleted')." {$stories} expired stories and {$uploads} unused uploads.");

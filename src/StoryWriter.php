@@ -10,12 +10,10 @@ use ErnestDefoe\Glimpse\Enum\Kind;
 use ErnestDefoe\Glimpse\Enum\Status;
 use ErnestDefoe\Glimpse\Event\Published;
 use ErnestDefoe\Glimpse\Event\Removed;
-use ErnestDefoe\Glimpse\Media\Storage;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Flarum\User\User;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 
 /**
@@ -31,8 +29,7 @@ class StoryWriter
         private readonly Extensions $extensions,
         private readonly TranslatorInterface $translator,
         private readonly Dispatcher $events,
-        private readonly ConnectionInterface $db,
-        private readonly Storage $storage,
+        private readonly Cleanup $cleanup,
     ) {
     }
 
@@ -131,16 +128,7 @@ class StoryWriter
     {
         $actor->assertCan('delete', $story);
 
-        $media = $story->media_id === null ? null : StoryMedia::query()->find($story->media_id);
-
-        $this->db->transaction(function () use ($story, $media): void {
-            $story->delete();
-            $media?->delete();
-        });
-
-        if ($media !== null) {
-            $this->storage->delete([$media->path]);
-        }
+        $this->cleanup->stories([$story->id]);
 
         $this->events->dispatch(new Removed($story, $actor));
     }

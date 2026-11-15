@@ -21,7 +21,7 @@ use ErnestDefoe\Glimpse\Api;
 use ErnestDefoe\Glimpse\Console\PruneCommand;
 use ErnestDefoe\Glimpse\Event\Published;
 use ErnestDefoe\Glimpse\Http\MediaController;
-use ErnestDefoe\Glimpse\Listener\DeleteMemberFiles;
+use ErnestDefoe\Glimpse\Listener\DeleteMemberData;
 use ErnestDefoe\Glimpse\Listener\QueueNotifications;
 use ErnestDefoe\Glimpse\Notification\NewStoryBlueprint;
 use ErnestDefoe\Glimpse\Notification\StoryMentionedBlueprint;
@@ -33,7 +33,6 @@ use Flarum\Api\Resource\ForumResource;
 use Flarum\Extend;
 use Flarum\Foundation\Paths;
 use Flarum\Search\Database\DatabaseSearchDriver;
-use Flarum\User\Event\Deleted as UserDeleted;
 use Flarum\User\Event\Deleting as UserDeleting;
 use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 
@@ -97,8 +96,7 @@ return [
 
     (new Extend\Event())
         ->listen(Published::class, QueueNotifications::class)
-        ->listen(UserDeleting::class, [DeleteMemberFiles::class, 'deleting'])
-        ->listen(UserDeleted::class, [DeleteMemberFiles::class, 'deleted']),
+        ->listen(UserDeleting::class, DeleteMemberData::class),
 
     (new Extend\ThrottleApi())
         ->set('glimpse', Throttle::class),
@@ -124,6 +122,7 @@ return [
         ->default('ernestdefoe-glimpse.notify_followers', false)
         ->default('ernestdefoe-glimpse.notify_cap', 500)
         ->default('ernestdefoe-glimpse.daily_limit', 20)
+        ->default('ernestdefoe-glimpse.flood_seconds', 3)
         ->default('ernestdefoe-glimpse.highlights_max', 20)
         ->default('ernestdefoe-glimpse.highlight_stories_max', 100),
 

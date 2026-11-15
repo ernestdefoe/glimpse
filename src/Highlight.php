@@ -35,13 +35,6 @@ class Highlight extends AbstractModel
         'updated_at' => 'datetime',
     ];
 
-    /**
-     * Story ids the API set on this highlight, synced once it is saved.
-     *
-     * @var list<int>|null
-     */
-    public ?array $pendingStoryIds = null;
-
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {

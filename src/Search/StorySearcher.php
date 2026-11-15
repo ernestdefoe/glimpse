@@ -28,7 +28,7 @@ class StorySearcher extends AbstractSearcher
     public function getQuery(User $actor): Builder
     {
         return $this->flags->apply(
-            Story::whereVisibleTo($actor)->select('glimpse_stories.*')->with(['user', 'media']),
+            Story::whereVisibleTo($actor)->select('glimpse_stories.*')->with(['user.groups', 'media']),
             $actor
         );
     }

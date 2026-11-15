@@ -107,7 +107,9 @@ class HighlightResource extends AbstractDatabaseResource
                 ->includable()
                 ->writable()
                 ->scope(fn (Builder|Relation $query, Context $context) => $query->whereVisibleTo($context->getActor()))
-                ->set(fn (Highlight $highlight, array $stories, Context $context) => $this->setStories($highlight, $stories, $context)),
+                // Checked before the highlight is written; synced (instead of Flarum's plain sync) after.
+                ->set(fn (Highlight $highlight, array $stories, Context $context) => $this->checkStories($highlight, $stories, $context))
+                ->save(fn (Highlight $highlight, array $stories, Context $context) => $this->saveStories($highlight, $stories, $context)),
         ];
     }
 
@@ -127,39 +129,36 @@ class HighlightResource extends AbstractDatabaseResource
         return $model;
     }
 
-    /** @param Context $context */
-    public function saved(object $model, BaseContext $context): ?object
-    {
-        if ($model->pendingStoryIds !== null) {
-            $ids = $model->pendingStoryIds;
-            $model->pendingStoryIds = null;
-            $this->db->transaction(fn () => $model->stories()->sync(array_combine($ids, array_map(
-                fn (int $position): array => ['position' => $position],
-                array_keys($ids)
-            ))));
-        }
-
-        return $model;
-    }
-
     /**
-     * Only the member's own stories, in the order given, up to the admin's limit.
+     * Before anything is written: only the owner edits a highlight, and it holds at most the admin's limit.
      *
      * @param array<mixed> $stories
      */
-    private function setStories(Highlight $highlight, array $stories, Context $context): void
+    private function checkStories(Highlight $highlight, array $stories, Context $context): void
     {
-        $actor = $context->getActor();
-        if ($highlight->exists && $highlight->user_id !== $actor->id) {
+        if ($highlight->exists && $highlight->user_id !== $context->getActor()->id) {
             throw new PermissionDeniedException();
         }
 
-        $ids = array_values(array_unique(array_map(fn (mixed $story): int => $story instanceof Story ? $story->id : 0, $stories)));
-        if (count($ids) > $this->config->highlightStoriesMax()) {
+        if (count($stories) > $this->config->highlightStoriesMax()) {
             throw new ValidationException(['stories' => $this->translator->trans('ernestdefoe-glimpse.api.highlight_full', ['{count}' => $this->config->highlightStoriesMax()])]);
         }
+    }
 
-        $own = Ids::of(Story::query()->whereIn('id', $ids)->where('user_id', $actor->id)->pluck('id'));
-        $highlight->pendingStoryIds = array_values(array_intersect($ids, $own));
+    /**
+     * Keeps the member's own stories only, in the order given.
+     *
+     * @param array<mixed> $stories
+     */
+    private function saveStories(Highlight $highlight, array $stories, Context $context): void
+    {
+        $ids = Ids::of(array_map(fn (mixed $story): int => $story instanceof Story ? $story->id : 0, $stories));
+        $own = Ids::of(Story::query()->whereIn('id', $ids)->where('user_id', $context->getActor()->id)->pluck('id'));
+        $ids = array_values(array_intersect($ids, $own));
+
+        $this->db->transaction(fn () => $highlight->stories()->sync(array_combine($ids, array_map(
+            fn (int $position): array => ['position' => $position],
+            array_keys($ids)
+        ))));
     }
 }

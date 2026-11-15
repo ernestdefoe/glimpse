@@ -98,6 +98,12 @@ class Config
         return $list === [] ? ['❤️'] : array_slice($list, 0, 8);
     }
 
+    /** Seconds a member waits between uploads or stories; 0 turns the guard off. */
+    public function floodSeconds(): int
+    {
+        return $this->clamp($this->int('flood_seconds', 3), 0, 300);
+    }
+
     public function approvalPosts(): int
     {
         return max(0, $this->int('approval_posts', 0));

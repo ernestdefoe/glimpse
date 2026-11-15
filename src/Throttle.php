@@ -16,7 +16,9 @@ class Throttle
 {
     private const ROUTES = ['stories.create', 'story-media.upload'];
 
-    private const SECONDS = 3;
+    public function __construct(private readonly Config $config)
+    {
+    }
 
     public function __invoke(ServerRequestInterface $request): ?bool
     {
@@ -25,11 +27,12 @@ class Throttle
         }
 
         $actor = RequestUtil::getActor($request);
-        if ($actor->isGuest() || $actor->hasPermission('glimpse.moderate')) {
+        $seconds = $this->config->floodSeconds();
+        if ($seconds === 0 || $actor->isGuest() || $actor->hasPermission('glimpse.moderate')) {
             return null;
         }
 
-        $since = Carbon::now()->subSeconds(self::SECONDS);
+        $since = Carbon::now()->subSeconds($seconds);
 
         return $request->getAttribute('routeName') === 'stories.create'
             ? Story::query()->where('user_id', $actor->id)->where('created_at', '>', $since)->exists()

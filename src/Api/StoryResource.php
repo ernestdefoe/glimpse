@@ -72,7 +72,7 @@ class StoryResource extends AbstractDatabaseResource
                 ->paginate(24, 100),
             Endpoint\Show::make()
                 ->defaultInclude(['user', 'mentionedUsers'])
-                ->eagerLoad(['user', 'media', 'mentionedUsers']),
+                ->eagerLoad(['user.groups', 'media', 'mentionedUsers']),
             Endpoint\Create::make()
                 ->authenticated()
                 ->can('glimpse.create')

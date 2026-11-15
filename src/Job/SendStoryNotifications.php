@@ -39,7 +39,8 @@ class SendStoryNotifications extends AbstractJob
 
     public function handle(NotificationSyncer $notifications, Config $config, Extensions $extensions, ConnectionInterface $db): void
     {
-        $story = Story::query()->with(['user', 'mentionedUsers'])->find($this->storyId);
+        // The mentioned members' groups too: the visibility rule reads their permissions.
+        $story = Story::query()->with(['user', 'mentionedUsers.groups'])->find($this->storyId);
         if ($story === null || $story->status !== Status::Live || $story->user === null) {
             return;
         }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ErnestDefoe\Glimpse\Media;
 
 /**
- * Removes the metadata elements of a WebM file (Tags and Attachments) without re-encoding it, and
- * reads its duration from the Info element.
+ * Removes the metadata of a WebM file (Tags, Attachments, and the Info element's Title) without
+ * re-encoding it, and reads its duration from the Info element.
  *
  * Each removed element is overwritten in place with an EBML Void element of the same length full of
  * zeros, so nothing moves and the SeekHead and Cues stay right. Elements after a Cluster of unknown
@@ -23,6 +23,8 @@ class WebmScrubber
     private const TIMECODE_SCALE = 0x2AD7B1;
 
     private const DURATION = 0x4489;
+
+    private const TITLE = 0x7BA9;
 
     /** Tags and Attachments. */
     private const METADATA = [0x1254C367, 0x1941A469];
@@ -76,7 +78,8 @@ class WebmScrubber
         return ['bytes' => $bytes, 'durationMs' => $durationMs];
     }
 
-    private function duration(string $bytes, int $start, int $end): ?int
+    /** Reads the duration from Info, and voids its Title on the way. */
+    private function duration(string &$bytes, int $start, int $end): ?int
     {
         $scale = 1_000_000;
         $duration = null;
@@ -93,6 +96,8 @@ class WebmScrubber
             } elseif ($el['id'] === self::DURATION && ($el['size'] === 4 || $el['size'] === 8)) {
                 $float = unpack($el['size'] === 4 ? 'G' : 'E', $data);
                 $duration = is_array($float) && is_float($float[1] ?? null) ? $float[1] : null;
+            } elseif ($el['id'] === self::TITLE) {
+                $this->void($bytes, $pos, $el['dataStart'] + $el['size'] - $pos);
             }
             $pos = $el['dataStart'] + $el['size'];
         }
