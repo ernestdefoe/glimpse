@@ -7,7 +7,7 @@ namespace ErnestDefoe\Glimpse\Job;
 use Carbon\Carbon;
 use ErnestDefoe\Glimpse\Config;
 use ErnestDefoe\Glimpse\Enum\Status;
-use ErnestDefoe\Glimpse\Extensions;
+use ErnestDefoe\Glimpse\Follows\FollowGraph;
 use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Notification\NewStoryBlueprint;
 use ErnestDefoe\Glimpse\Notification\StoryMentionedBlueprint;
@@ -26,7 +26,7 @@ use Illuminate\Support\Collection;
  * - everyone its caption mentions (alert + email), if they can see it;
  * - with the admin's switch on, the author's followers (alert), at most the admin's cap, and only for
  *   the author's first story in a day, so a burst of stories is one notification, not twenty.
- *   Followers are found set-wise with the view permission and the ignore rule, never one at a time.
+ *   Followers are found set-wise with the view permission, never one at a time.
  */
 class SendStoryNotifications extends AbstractJob
 {
@@ -37,7 +37,7 @@ class SendStoryNotifications extends AbstractJob
         parent::__construct();
     }
 
-    public function handle(NotificationSyncer $notifications, Config $config, Extensions $extensions): void
+    public function handle(NotificationSyncer $notifications, Config $config, FollowGraph $follows): void
     {
         // The mentioned members' groups too: the visibility rule reads their permissions.
         $story = Story::query()->with(['user', 'mentionedUsers.groups'])->find($this->storyId);
@@ -52,7 +52,7 @@ class SendStoryNotifications extends AbstractJob
             $notifications->sync(new StoryMentionedBlueprint($story, $author), $mentioned);
         }
 
-        if (! $config->notifyFollowers() || ! $extensions->follows() || $this->postedToday($story)) {
+        if (! $config->notifyFollowers() || ! $follows->available() || $this->postedToday($story)) {
             return;
         }
 
@@ -65,17 +65,13 @@ class SendStoryNotifications extends AbstractJob
         $everyone = array_intersect($viewerGroups, [Group::GUEST_ID, Group::MEMBER_ID]) !== [];
 
         $followers = User::query()
-            ->whereIn('users.id', fn (QueryBuilder $q) => $q->select('user_id')->from('user_followers')->where('followed_user_id', $author->id))
+            ->whereIn('users.id', $follows->followersOf($author->id))
             ->whereNotIn('users.id', $skip === [] ? [0] : $skip)
             ->where('users.is_email_confirmed', true);
 
         if (! $everyone) {
             $followers->whereIn('users.id', fn (QueryBuilder $q) => $q->select('user_id')->from('group_user')
                 ->whereIn('group_id', array_merge([Group::ADMINISTRATOR_ID], $viewerGroups)));
-        }
-
-        if ($extensions->ignores() && $config->ignoreHidesMine()) {
-            $followers->whereNotIn('users.id', fn (QueryBuilder $q) => $q->select('ignored_user_id')->from('ignored_user')->where('user_id', $author->id));
         }
 
         $followers->orderBy('users.id')->chunk(self::CHUNK, function (Collection $users) use ($story, $author, $notifications, &$sent, $cap): bool {

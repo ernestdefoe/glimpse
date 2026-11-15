@@ -1,6 +1,7 @@
 import app from 'flarum/forum/app';
 import RingBar from './RingBar';
 import { EXT } from './util';
+import { defaultExport, has, runtime } from '../common/runtime';
 
 /*
  * The ring bar offered to every widget host that is present: fof/forum-widgets-core, Bespoke and Page
@@ -27,16 +28,24 @@ export function registerWidgets(): void {
   }
 }
 
-/** A module of fof/forum-widgets-core, looked up at runtime. */
-function fof(path: string): any {
-  const mod = (globalThis as any).flarum?.reg?.get?.('fof-forum-widgets-core', path);
-  return mod?.default ?? mod;
+/** The parts of fof/forum-widgets-core used here, looked up at runtime. */
+type WidgetBaseClass = new (...args: never[]) => object;
+type WidgetsExtender = new () => { add(widget: object): { extend(app: unknown, extension: string): void } };
+type WidgetHost = { widgets?: { config?: { instances?: Array<{ id?: string } | null> } } };
+
+/** The queues Bespoke and Page Builder drain on every lookup, so the order extensions boot in doesn't matter. */
+const queues = globalThis as unknown as { BespokeWidgetQueue?: object[]; PageBuilderBlockQueue?: object[] };
+
+function fof<T>(path: string): T | undefined {
+  const mod = runtime()?.reg.get('fof-forum-widgets-core', path);
+  return mod ? defaultExport<T>(mod) : undefined;
 }
 
 function registerFof(): void {
-  const Widgets = fof('common/extend/Widgets');
-  const WidgetBase = fof('common/components/Widget');
-  if (!Widgets || !WidgetBase || !(app as any).widgets) return;
+  const Widgets = fof<WidgetsExtender>('common/extend/Widgets');
+  const WidgetBase = fof<WidgetBaseClass>('common/components/Widget');
+  const host = app as unknown as WidgetHost;
+  if (!Widgets || !WidgetBase || !host.widgets) return;
 
   class GlimpseFofWidget extends WidgetBase {
     className() {
@@ -58,7 +67,7 @@ function registerFof(): void {
       key: KEY,
       component: GlimpseFofWidget,
       // Opt-in: shown only where the admin placed it in FoF's layout editor.
-      isDisabled: () => !((app as any).widgets?.config?.instances || []).some((i: any) => i?.id === `${EXT}:${KEY}`),
+      isDisabled: () => !(host.widgets?.config?.instances || []).some((instance) => instance?.id === `${EXT}:${KEY}`),
       isUnique: true,
       placement: 'top',
       position: 0,
@@ -67,14 +76,22 @@ function registerFof(): void {
 }
 
 function registerBespoke(): void {
-  if (!('ernestdefoe-bespoke' in ((globalThis as any).flarum?.extensions || {}))) return;
-  // Bespoke drains this queue on every registry lookup; labels are keys (it calls string methods on them).
-  const queue = ((globalThis as any).BespokeWidgetQueue ||= []);
-  queue.push({ type: TYPE, label: TITLE, icon: ICON, zones: ['hero', 'top', 'above-list', 'below-list'], schema: [], component: widget });
+  if (!has('ernestdefoe-bespoke')) return;
+  // Bespoke's documented hook: it drains this queue on every registry lookup. Labels are translation
+  // keys, not translated text (Bespoke translates them itself).
+  (queues.BespokeWidgetQueue ||= []).push({
+    type: TYPE,
+    label: TITLE,
+    icon: ICON,
+    zones: ['hero', 'top', 'above-list', 'below-list'],
+    schema: [],
+    component: widget,
+  });
 }
 
 function registerPageBuilder(): void {
-  // Page Builder drains this queue on every lookup; matches Widget\StoriesBlock::type().
-  const queue = ((globalThis as any).PageBuilderBlockQueue ||= []);
-  queue.push({ type: TYPE, component: widget });
+  if (!has('ernestdefoe-page-builder')) return;
+  // Page Builder drains this queue on every lookup, so the order extensions boot in doesn't matter.
+  // `type` matches Widget\StoriesBlock::type() on the server.
+  (queues.PageBuilderBlockQueue ||= []).push({ type: TYPE, component: widget });
 }

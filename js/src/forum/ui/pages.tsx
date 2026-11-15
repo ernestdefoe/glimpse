@@ -1,67 +1,24 @@
 import app from 'flarum/forum/app';
 import Page from 'flarum/common/components/Page';
-import Avatar from 'flarum/common/components/Avatar';
 import Button from 'flarum/common/components/Button';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import classList from 'flarum/common/utils/classList';
 import humanTime from 'flarum/common/helpers/humanTime';
 import type User from 'flarum/common/models/User';
+import type UserPageComponent from 'flarum/forum/components/UserPage';
+import type { IUserPageAttrs } from 'flarum/forum/components/UserPage';
+import { defaultExport, runtime } from '../../common/runtime';
 import type Mithril from 'mithril';
 import type Story from '../models/Story';
-import type StoryHighlight from '../models/StoryHighlight';
 import type StoryReport from '../models/StoryReport';
 import { failed, onStoriesChanged, storiesChanged, t, tx } from '../util';
 import { IndexSidebar, PageStructure } from './core';
-import { openViewer } from './Viewer';
+import { openViewer } from './mount';
 import { openCreate } from './open';
-
-declare const flarum: any;
+import ProfileStories from './ProfileStories';
+import { storyCard } from './card';
 
 const PAGE = 24;
-
-/** A 9:16 card: the photo, the first frame of a video, or the text on its colour, with the author. */
-export function storyCard(story: Story, onopen: () => void, footer?: Mithril.Children): Mithril.Children {
-  const user = story.user();
-  return (
-    <article className={classList('GlimpseCard', story.isSeen() && 'is-seen')}>
-      <button type="button" className="GlimpseCard-open" onclick={onopen} aria-label={tx('page.open', { name: user ? user.displayName() : '' })}>
-        <span className={classList('GlimpseCard-media', story.kind() === 'text' && `GlimpseText GlimpseBg-${story.background() ?? 0}`)}>
-          {story.kind() === 'text' ? (
-            <span className="GlimpseText-body">{story.text()}</span>
-          ) : story.kind() === 'video' ? (
-            <video src={`${story.mediaUrl()}#t=0.1`} preload="metadata" muted playsinline aria-hidden="true" />
-          ) : (
-            <img src={story.mediaUrl()!} alt="" loading="lazy" decoding="async" />
-          )}
-        </span>
-        {story.kind() === 'video' && story.durationMs() ? (
-          <span className="GlimpseCard-duration">
-            <i className="fas fa-play" aria-hidden="true" /> {Math.round((story.durationMs() || 0) / 1000)}s
-          </span>
-        ) : null}
-        {user ? (
-          <span className="GlimpseCard-who">
-            <Avatar user={user} />
-            <span>
-              <span className="GlimpseCard-name">{user.displayName()}</span>
-              <span className="GlimpseCard-time">{humanTime(story.createdAt())}</span>
-            </span>
-          </span>
-        ) : null}
-      </button>
-      {status(story) ? <p className="GlimpseCard-status">{status(story)}</p> : null}
-      {footer ? <div className="GlimpseCard-foot">{footer}</div> : null}
-    </article>
-  );
-}
-
-/** What a story's author (or a moderator) needs to know that a viewer never sees. */
-function status(story: Story): Mithril.Children {
-  if (story.status() === 'pending') return t('profile.pending');
-  if (story.status() === 'hidden') return t('profile.hidden');
-  const expires = story.expiresAt();
-  return expires && expires.getTime() < Date.now() ? t('profile.kept') : null;
-}
 
 /** Plays the given stories grouped by author, starting at one of them. */
 function play(stories: Story[], start: Story): void {
@@ -116,8 +73,8 @@ export class StoriesPage extends Page {
     this.loading = true;
     const filter: Record<string, string> = this.following ? { live: '1', following: '1' } : { live: '1' };
     app.store
-      .find<Story[]>('stories', { filter, page: { offset, limit: PAGE, total: 0 } } as any)
-      .then((stories: any) => {
+      .find<Story[]>('stories', { filter, page: { offset, limit: PAGE, total: 0 } })
+      .then((stories) => {
         this.stories = offset ? [...this.stories, ...stories] : [...stories];
         this.more = !!stories.payload?.links?.next;
       })
@@ -196,10 +153,10 @@ export class QueuePage extends Page {
     const request =
       this.tab === 'pending'
         ? app.store
-            .find<Story[]>('stories', { filter: { status: 'pending' }, page: { limit: 50, total: 0 } } as any)
+            .find<Story[]>('stories', { filter: { status: 'pending' }, page: { limit: 50, total: 0 } })
             .then((s) => (this.stories = [...(s as Story[])]))
         : app.store
-            .find<StoryReport[]>('story-reports', { include: 'story,story.user,user', page: { limit: 50, total: 0 } } as any)
+            .find<StoryReport[]>('story-reports', { include: 'story,story.user,user', page: { limit: 50, total: 0 } })
             .then((r) => (this.reports = [...(r as StoryReport[])]));
     request.catch(failed).finally(() => {
       this.loading = false;
@@ -320,141 +277,24 @@ export class QueuePage extends Page {
   }
 }
 
-let made: any = null;
+let made: unknown = null;
 
 /**
- * The profile tab: the member's highlights row and their live stories. UserPage lives in a lazy chunk,
- * so the class is made once it is loaded.
+ * The profile tab. UserPage lives in core's lazy chunk, so this small subclass is made once it has
+ * loaded; the tab itself is ProfileStories.
  */
-export async function userStoriesPage(): Promise<any> {
+export async function userStoriesPage(): Promise<unknown> {
   if (made) return made;
-  const mod = await flarum.reg.asyncModuleImport('flarum/forum/components/UserPage');
-  const UserPage = mod.default || mod;
+  const UserPage = defaultExport<typeof UserPageComponent>(await runtime()!.reg.asyncModuleImport('flarum/forum/components/UserPage'));
 
   made = class UserStoriesPage extends UserPage {
-    stories: Story[] = [];
-    highlights: StoryHighlight[] = [];
-    loading = true;
-    unlisten: (() => void) | null = null;
-
-    oninit(vnode: Mithril.Vnode) {
+    oninit(vnode: Mithril.Vnode<IUserPageAttrs, this>) {
       super.oninit(vnode);
       this.loadUser(m.route.param('username'));
-      this.unlisten = onStoriesChanged(() => this.load());
-    }
-
-    onremove(vnode: Mithril.VnodeDOM) {
-      super.onremove(vnode);
-      this.unlisten?.();
-    }
-
-    show(user: User) {
-      super.show(user);
-      this.load();
-    }
-
-    own(): boolean {
-      return !!app.session.user && this.user === app.session.user;
-    }
-
-    load() {
-      if (!this.user) return;
-      this.loading = true;
-      Promise.all([
-        app.store.find<StoryHighlight[]>('story-highlights', { filter: { user: this.user.id() } } as any),
-        app.store.find<Story[]>('stories', {
-          filter: { author: this.user.id(), live: '1' },
-          sort: 'createdAt',
-          page: { limit: 100, total: 0 },
-        } as any),
-      ])
-        .then(([highlights, stories]) => {
-          this.highlights = [...(highlights as StoryHighlight[])];
-          this.stories = [...(stories as Story[])];
-        })
-        .catch(failed)
-        .finally(() => {
-          this.loading = false;
-          m.redraw();
-        });
     }
 
     content() {
-      const highlights = this.highlights.filter((h) => (h.stories() || []).filter(Boolean).length);
-
-      return (
-        <div className="GlimpseProfile">
-          {highlights.length || this.own() ? (
-            <section className="GlimpseProfile-section">
-              <h2 className="GlimpseProfile-label">{t('highlights.title')}</h2>
-              <ul className="GlimpseHighlights">
-                {highlights.map((highlight) => {
-                  const stories = (highlight.stories() || []).filter(Boolean) as Story[];
-                  const cover = stories[0];
-                  return (
-                    <li>
-                      <button
-                        type="button"
-                        className="GlimpseHighlights-item"
-                        aria-label={tx('highlights.play', { title: highlight.title() })}
-                        onclick={() => openViewer({ users: [this.user], start: this.user, stories, label: highlight.title() })}
-                      >
-                        <span
-                          className={classList(
-                            'GlimpseHighlights-cover',
-                            cover?.kind() === 'text' && `GlimpseText GlimpseBg-${cover.background() ?? 0}`
-                          )}
-                        >
-                          {cover && cover.kind() === 'photo' ? <img src={cover.mediaUrl()!} alt="" loading="lazy" /> : null}
-                          {cover && cover.kind() === 'video' ? (
-                            <video src={`${cover.mediaUrl()}#t=0.1`} preload="metadata" muted playsinline aria-hidden="true" />
-                          ) : null}
-                        </span>
-                        <span className="GlimpseHighlights-title">{highlight.title()}</span>
-                      </button>
-                      {this.own() ? (
-                        <button
-                          type="button"
-                          className="GlimpseHighlights-remove"
-                          aria-label={tx('highlights.delete', { title: highlight.title() })}
-                          onclick={() => {
-                            if (confirm(tx('highlights.delete_confirm', { title: highlight.title() }))) highlight.delete().then(() => this.load());
-                          }}
-                        >
-                          <i className="fas fa-xmark" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-              {this.own() && !highlights.length ? <p className="GlimpseProfile-hint">{t('highlights.hint')}</p> : null}
-            </section>
-          ) : null}
-
-          <section className="GlimpseProfile-section">
-            <div className="GlimpseProfile-row">
-              <h2 className="GlimpseProfile-label">{t('profile.live')}</h2>
-              {this.own() && app.forum.attribute('glimpseCanCreate') ? (
-                <Button className="Button Button--primary" icon="fas fa-plus" onclick={() => openCreate()}>
-                  {t('page.add')}
-                </Button>
-              ) : null}
-            </div>
-            {this.loading ? (
-              <LoadingIndicator />
-            ) : this.stories.length ? (
-              <div className="GlimpseGrid">
-                {this.stories.map((story) =>
-                  storyCard(story, () => openViewer({ users: [this.user], start: this.user, stories: this.stories, startStory: story }))
-                )}
-              </div>
-            ) : (
-              <p className="GlimpsePage-empty">{t(this.own() ? 'profile.empty_own' : 'profile.empty', { name: this.user.displayName() })}</p>
-            )}
-          </section>
-        </div>
-      );
+      return this.user ? <ProfileStories key={this.user.id()} user={this.user} /> : null;
     }
   };
 

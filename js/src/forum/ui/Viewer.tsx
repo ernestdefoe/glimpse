@@ -5,12 +5,16 @@ import Link from 'flarum/common/components/Link';
 import classList from 'flarum/common/utils/classList';
 import humanTime from 'flarum/common/helpers/humanTime';
 import type User from 'flarum/common/models/User';
+import type { ApiPayloadSingle } from 'flarum/common/Store';
 import type Mithril from 'mithril';
 import type Story from '../models/Story';
-import { storiesChanged, t, tx } from '../util';
+import { failed, t, tx } from '../util';
+import Gestures from './gestures';
 import caption from './caption';
-import { replyChannel, sendReply } from './reply';
-import { openHighlightPicker, openReport, openSeenBy } from './modals';
+import ReplyBar from './ReplyBar';
+import ViewerMenu from './ViewerMenu';
+import { AUDIENCE_ICONS, hostOf, preload } from './viewerTools';
+import { openSeenBy } from './modals';
 
 export interface ViewerOptions {
   /** The people to play, in order. */
@@ -32,15 +36,9 @@ interface ViewerAttrs extends ComponentAttrs {
 }
 
 const SEEN_FLUSH_MS = 1500;
-const HOLD_MS = 200;
-const SWIPE_PX = 70;
-const CLOSE_PX = 90;
 
 /**
- * The full-screen story player.
- *
- * Tap the right two thirds to go on, the left third to go back; hold to pause; swipe down (or Esc) to
- * close; swipe sideways to change person. Keys: ← → Space Esc. Photos and text stay up for the admin's
+ * The full-screen story player. Touch and mouse are Gestures' job; keys here: ← → Space Esc. Photos and text stay up for the admin's
  * time, a video for its length (never past the admin's limit). The next story's media is fetched while
  * this one plays, and the next person's stories while their last one plays. Stories are marked seen in
  * batches, not one request each.
@@ -58,18 +56,23 @@ export default class Viewer extends Component<ViewerAttrs> {
   private last = 0;
   private raf = 0;
   private paused = false;
-  private holding = false;
   private muted = true;
   private menuOpen = false;
   private reacting = false;
   private toast: string | null = null;
   private toastTimer = 0;
-  private replyText = '';
 
   private seen = new Set<string>();
   private seenTimer = 0;
-  private pointer: { x: number; y: number; moved: boolean; timer: number } | null = null;
-  private drag = 0;
+  private gestures = new Gestures({
+    card: () => this.element?.querySelector<HTMLElement>('.GlimpseViewer-card') ?? null,
+    hold: (on) => this.setPaused(on),
+    forward: () => this.next(),
+    back: () => this.previous(),
+    nextPerson: () => this.nextUser(),
+    previousPerson: () => this.previousUser(),
+    close: () => this.attrs.close(),
+  });
   private previousFocus: Element | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onkey(e);
 
@@ -112,15 +115,18 @@ export default class Viewer extends Component<ViewerAttrs> {
     return this.stories[this.index];
   }
 
-  private fetch(user: User): Promise<Story[]> {
+  private storiesOf(user: User): Promise<Story[]> {
     const id = user.id()!;
     if (!this.cache.has(id)) {
       this.cache.set(
         id,
         app.store
-          .find<Story[]>('stories', { filter: { author: id, live: '1' }, sort: 'createdAt', page: { limit: 100, total: 0 } } as any)
+          .find<Story[]>('stories', { filter: { author: id, live: '1' }, sort: 'createdAt', page: { limit: 100, total: 0 } })
           .then((stories) => [...(stories as Story[])])
-          .catch(() => [])
+          .catch(() => {
+            failed();
+            return [];
+          })
       );
     }
     return this.cache.get(id)!;
@@ -131,7 +137,7 @@ export default class Viewer extends Component<ViewerAttrs> {
     if (!user) return this.attrs.close();
 
     this.loading = true;
-    this.fetch(user).then((stories) => {
+    this.storiesOf(user).then((stories) => {
       if (this.user() !== user) return;
       this.loading = false;
       if (!stories.length) {
@@ -168,7 +174,7 @@ export default class Viewer extends Component<ViewerAttrs> {
     const next = this.stories[this.index + 1];
     if (next) return preload(next);
     const nextUser = this.users[this.userIndex + 1];
-    if (nextUser) this.fetch(nextUser).then((stories) => stories[0] && preload(stories[0]));
+    if (nextUser) this.storiesOf(nextUser).then((stories) => stories[0] && preload(stories[0]));
   }
 
   private markSeen(story: Story): void {
@@ -292,67 +298,6 @@ export default class Viewer extends Component<ViewerAttrs> {
     }
   }
 
-  private pointerdown(e: PointerEvent): void {
-    if ((e.target as HTMLElement).closest('button, a, input, .GlimpseViewer-menu, .GlimpseViewer-reactions')) return;
-    this.holding = false;
-    this.pointer = {
-      x: e.clientX,
-      y: e.clientY,
-      moved: false,
-      timer: window.setTimeout(() => {
-        this.holding = true;
-        this.setPaused(true);
-      }, HOLD_MS),
-    };
-  }
-
-  private pointermove(e: PointerEvent): void {
-    if (!this.pointer) return;
-    const dx = e.clientX - this.pointer.x;
-    const dy = e.clientY - this.pointer.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-      this.pointer.moved = true;
-      clearTimeout(this.pointer.timer);
-    }
-    this.drag = Math.max(0, dy);
-    const card = this.element?.querySelector<HTMLElement>('.GlimpseViewer-card');
-    if (card) card.style.transform = this.drag ? `translateY(${this.drag}px) scale(${1 - this.drag / 1500})` : '';
-  }
-
-  private pointerup(e: PointerEvent): void {
-    const start = this.pointer;
-    this.pointer = null;
-    this.drag = 0;
-    const card = this.element?.querySelector<HTMLElement>('.GlimpseViewer-card');
-    if (card) card.style.transform = '';
-    if (!start) return;
-    clearTimeout(start.timer);
-
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    const wasHold = this.holding;
-    if (wasHold) {
-      this.holding = false;
-      this.setPaused(false);
-    }
-
-    if (dy > CLOSE_PX && Math.abs(dy) > Math.abs(dx)) return this.attrs.close();
-    if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? this.nextUser() : this.previousUser();
-    if (wasHold || start.moved || !card) return;
-
-    const rect = card.getBoundingClientRect();
-    e.clientX - rect.left > rect.width / 3 ? this.next() : this.previous();
-  }
-
-  private pointercancel(): void {
-    if (this.pointer) clearTimeout(this.pointer.timer);
-    this.pointer = null;
-    if (this.holding) {
-      this.holding = false;
-      this.setPaused(false);
-    }
-  }
-
   private say(message: string): void {
     this.toast = message;
     clearTimeout(this.toastTimer);
@@ -372,7 +317,7 @@ export default class Viewer extends Component<ViewerAttrs> {
     const previous = story.myReaction();
     story.pushAttributes({ myReaction: reaction });
     app
-      .request<any>({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/${story.id()}/reaction`, body: { reaction } })
+      .request<ApiPayloadSingle>({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/stories/${story.id()}/reaction`, body: { reaction } })
       .then((payload) => {
         app.store.pushPayload(payload);
         this.say(reaction ? tx('viewer.reacted', { reaction }) : tx('viewer.unreacted'));
@@ -381,84 +326,15 @@ export default class Viewer extends Component<ViewerAttrs> {
       .finally(() => this.setPaused(false));
   }
 
-  private reply(): void {
-    const story = this.story();
-    const text = this.replyText.trim();
-    if (!story || !text) return;
-    this.replyText = '';
-    (document.activeElement as HTMLElement | null)?.blur();
-    sendReply(story, text)
-      .then(() => this.say(tx('viewer.reply_sent', { name: (story.user() || null)?.displayName() })))
-      .catch(() => this.say(tx('viewer.reply_failed')))
-      .finally(() => this.setPaused(false));
-  }
-
-  private menu(action: string): void {
-    const story = this.story();
-    const user = this.user();
-    this.menuOpen = false;
-    if (!story || !user) return;
-
-    const resume = () => this.setPaused(false);
-
-    switch (action) {
-      case 'report':
-        openReport(story, () => this.say(tx('viewer.reported')), resume);
-        break;
-      case 'mute':
-        app.store
-          .createRecord('story-mutes')
-          .save({ relationships: { mutedUser: user } } as any)
-          .then(() => {
-            this.say(tx('viewer.muted', { name: user.displayName() }));
-            storiesChanged();
-            window.setTimeout(() => this.nextUser(), 700);
-          });
-        break;
-      case 'copy':
-        navigator.clipboard
-          ?.writeText(app.forum.attribute<string>('baseUrl') + app.route('glimpse.story', { id: story.id() }))
-          .then(() => this.say(tx('viewer.copied')))
-          .catch(() => this.say(tx('viewer.copy_failed')));
-        resume();
-        break;
-      case 'highlight':
-        openHighlightPicker(story, (title) => this.say(tx('viewer.highlighted', { title })), resume);
-        break;
-      case 'hide':
-        story.save({ status: 'hidden' }).then(() => {
-          this.say(tx('viewer.hidden'));
-          storiesChanged();
-          resume();
-        });
-        break;
-      case 'delete':
-        if (!confirm(tx('viewer.delete_confirm'))) return resume();
-        story.delete().then(() => {
-          this.say(tx('viewer.deleted'));
-          storiesChanged();
-          this.stories.splice(this.index, 1);
-          this.cache.delete(user.id()!);
-          if (!this.stories.length) return this.nextUser();
-          this.index = Math.min(this.index, this.stories.length - 1);
-          this.begin();
-        });
-        break;
-    }
-  }
-
   // ---------- view ----------
 
   view() {
     const story = this.story();
     const user = this.user();
-    const own = !!story && story.user() === app.session.user;
-    const reactions: string[] = app.forum.attribute('glimpseReactions') || ['❤️'];
-    const channel = replyChannel();
 
     return (
       <div
-        className={classList('GlimpseViewer', this.paused && 'is-paused', this.holding && 'is-holding')}
+        className={classList('GlimpseViewer', this.paused && 'is-paused', this.gestures.holding && 'is-holding')}
         role="dialog"
         aria-modal="true"
         aria-label={tx('viewer.label', { name: user?.displayName() || '' })}
@@ -474,171 +350,173 @@ export default class Viewer extends Component<ViewerAttrs> {
         >
           <i className="fas fa-chevron-left" aria-hidden="true" />
         </button>
-
-        <div
-          className="GlimpseViewer-card"
-          onpointerdown={(e: PointerEvent) => this.pointerdown(e)}
-          onpointermove={(e: PointerEvent) => this.pointermove(e)}
-          onpointerup={(e: PointerEvent) => this.pointerup(e)}
-          onpointercancel={() => this.pointercancel()}
-          oncontextmenu={(e: Event) => e.preventDefault()}
-        >
-          {story ? this.media(story) : <div className="GlimpseViewer-media GlimpseViewer-media--loading" />}
-
-          <ol className="GlimpseViewer-progress" aria-hidden="true">
-            {this.stories.map((s, i) => (
-              <li className={classList(i < this.index && 'is-done', i === this.index && 'is-current')}>
-                <b />
-              </li>
-            ))}
-          </ol>
-
-          {story && user ? (
-            <header className="GlimpseViewer-head">
-              <Link href={app.route.user(user)} className="GlimpseViewer-author" onclick={() => this.attrs.close()}>
-                <Avatar user={user} />
-                <span className="GlimpseViewer-name">{own ? t('viewer.your_story') : user.displayName()}</span>
-              </Link>
-              <span className="GlimpseViewer-time">{this.attrs.options.label || humanTime(story.createdAt())}</span>
-              <i
-                className={classList('GlimpseViewer-audience fas', AUDIENCE_ICONS[story.audience()])}
-                title={tx(`audience.${story.audience()}`)}
-                aria-label={tx(`audience.${story.audience()}`)}
-              />
-              <span className="GlimpseViewer-spacer" />
-              {story.kind() === 'video' ? (
-                <button
-                  type="button"
-                  className="GlimpseViewer-icon"
-                  aria-label={tx(this.muted ? 'viewer.unmute' : 'viewer.mute')}
-                  onclick={() => this.toggleSound()}
-                >
-                  <i className={classList('fas', this.muted ? 'fa-volume-xmark' : 'fa-volume-high')} aria-hidden="true" />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="GlimpseViewer-icon"
-                aria-label={tx(this.paused ? 'viewer.play' : 'viewer.pause')}
-                onclick={() => this.setPaused(!this.paused)}
-              >
-                <i className={classList('fas', this.paused ? 'fa-play' : 'fa-pause')} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="GlimpseViewer-icon"
-                aria-label={tx('viewer.more')}
-                aria-expanded={this.menuOpen ? 'true' : 'false'}
-                onclick={() => {
-                  this.menuOpen = !this.menuOpen;
-                  this.setPaused(this.menuOpen);
-                }}
-              >
-                <i className="fas fa-ellipsis" aria-hidden="true" />
-              </button>
-            </header>
-          ) : null}
-
-          {this.menuOpen && story ? this.menuView(story, own) : null}
-
-          {this.paused && this.holding ? <div className="GlimpseViewer-paused">{t('viewer.paused')}</div> : null}
-          {this.toast ? (
-            <div className="GlimpseViewer-toast" role="status">
-              {this.toast}
-            </div>
-          ) : null}
-
-          {story ? (
-            <footer className="GlimpseViewer-foot">
-              {story.caption() ? <p className="GlimpseViewer-caption">{caption(story)}</p> : null}
-              {story.linkUrl() ? (
-                <a className="GlimpseViewer-link" href={story.linkUrl()!} target="_blank" rel="nofollow ugc noopener noreferrer">
-                  <i className="fas fa-link" aria-hidden="true" /> {hostOf(story.linkUrl()!)}
-                </a>
-              ) : null}
-              {own ? (
-                <button type="button" className="GlimpseViewer-seen" onclick={() => this.openSeenBy(story)}>
-                  <i className="fas fa-eye" aria-hidden="true" /> {t('viewer.seen_by', { count: story.viewCount() || 0 })}
-                  {story.reactionCount() ? (
-                    <span className="GlimpseViewer-seenReactions">
-                      {' · '}
-                      {t('viewer.reactions', { count: story.reactionCount() })}
-                    </span>
-                  ) : null}
-                </button>
-              ) : null}
-              {!own && (story.canReact() || channel) ? (
-                <div className="GlimpseViewer-reply">
-                  {channel ? (
-                    <input
-                      className="GlimpseViewer-input"
-                      placeholder={tx('viewer.reply_placeholder', { name: user?.displayName() })}
-                      aria-label={tx('viewer.reply_label')}
-                      maxlength={500}
-                      value={this.replyText}
-                      onfocus={() => this.setPaused(true)}
-                      onblur={() => {
-                        if (!this.replyText) this.setPaused(false);
-                      }}
-                      oninput={(e: InputEvent) => (this.replyText = (e.target as HTMLInputElement).value)}
-                      onkeydown={(e: KeyboardEvent) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          this.reply();
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="GlimpseViewer-spacer" />
-                  )}
-                  {story.canReact() ? (
-                    <button
-                      type="button"
-                      className={classList('GlimpseViewer-react', story.myReaction() && 'is-active')}
-                      aria-label={tx('viewer.react')}
-                      aria-expanded={this.reacting ? 'true' : 'false'}
-                      onclick={() => {
-                        if (reactions.length === 1) return this.react(story.myReaction() ? null : reactions[0]);
-                        this.reacting = !this.reacting;
-                        this.setPaused(this.reacting);
-                      }}
-                    >
-                      {story.myReaction() || reactions[0]}
-                    </button>
-                  ) : null}
-                  {channel && this.replyText.trim() ? (
-                    <button type="button" className="GlimpseViewer-send" aria-label={tx('viewer.send')} onclick={() => this.reply()}>
-                      <i className="fas fa-paper-plane" aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </footer>
-          ) : null}
-
-          {this.reacting && story ? (
-            <div className="GlimpseViewer-reactions" role="group" aria-label={tx('viewer.react')}>
-              {reactions.map((reaction) => (
-                <button
-                  type="button"
-                  className={classList(story.myReaction() === reaction && 'is-active')}
-                  aria-pressed={story.myReaction() === reaction ? 'true' : 'false'}
-                  onclick={() => this.react(story.myReaction() === reaction ? null : reaction)}
-                >
-                  {reaction}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {this.nextPreload()}
-        </div>
-
+        {this.card(story, user)}
         <button type="button" className="GlimpseViewer-arrow GlimpseViewer-arrow--next" aria-label={tx('viewer.next')} onclick={() => this.next()}>
           <i className="fas fa-chevron-right" aria-hidden="true" />
         </button>
       </div>
     );
+  }
+
+  private card(story: Story | undefined, user: User | undefined): Mithril.Children {
+    const own = !!story && story.user() === app.session.user;
+
+    return (
+      <div
+        className="GlimpseViewer-card"
+        onpointerdown={(e: PointerEvent) => this.gestures.down(e)}
+        onpointermove={(e: PointerEvent) => this.gestures.move(e)}
+        onpointerup={(e: PointerEvent) => this.gestures.up(e)}
+        onpointercancel={() => this.gestures.cancel()}
+        oncontextmenu={(e: Event) => e.preventDefault()}
+      >
+        {story ? this.media(story) : <div className="GlimpseViewer-media GlimpseViewer-media--loading" />}
+        <ol className="GlimpseViewer-progress" aria-hidden="true">
+          {this.stories.map((_, i) => (
+            <li className={classList(i < this.index && 'is-done', i === this.index && 'is-current')}>
+              <b />
+            </li>
+          ))}
+        </ol>
+        {story && user ? this.header(story, user, own) : null}
+        {this.menuOpen && story ? (
+          <ViewerMenu
+            story={story}
+            own={own}
+            onsay={(message: string) => this.say(message)}
+            onclose={(resume: boolean) => {
+              this.menuOpen = false;
+              if (resume) this.setPaused(false);
+            }}
+            onmuted={() => this.nextUser()}
+            ondeleted={() => this.dropCurrent()}
+          />
+        ) : null}
+        {this.paused && this.gestures.holding ? <div className="GlimpseViewer-paused">{t('viewer.paused')}</div> : null}
+        {this.toast ? (
+          <div className="GlimpseViewer-toast" role="status">
+            {this.toast}
+          </div>
+        ) : null}
+        {story ? this.footer(story, user, own) : null}
+        {this.nextPreload()}
+      </div>
+    );
+  }
+
+  private header(story: Story, user: User, own: boolean): Mithril.Children {
+    return (
+      <header className="GlimpseViewer-head">
+        <Link href={app.route.user(user)} className="GlimpseViewer-author" onclick={() => this.attrs.close()}>
+          <Avatar user={user} />
+          <span className="GlimpseViewer-name">{own ? t('viewer.your_story') : user.displayName()}</span>
+        </Link>
+        <span className="GlimpseViewer-time">{this.attrs.options.label || humanTime(story.createdAt())}</span>
+        <i
+          className={classList('GlimpseViewer-audience fas', AUDIENCE_ICONS[story.audience()])}
+          title={tx(`audience.${story.audience()}`)}
+          aria-label={tx(`audience.${story.audience()}`)}
+        />
+        <span className="GlimpseViewer-spacer" />
+        {story.kind() === 'video' ? (
+          <button
+            type="button"
+            className="GlimpseViewer-icon"
+            aria-label={tx(this.muted ? 'viewer.unmute' : 'viewer.mute')}
+            onclick={() => this.toggleSound()}
+          >
+            <i className={classList('fas', this.muted ? 'fa-volume-xmark' : 'fa-volume-high')} aria-hidden="true" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="GlimpseViewer-icon"
+          aria-label={tx(this.paused ? 'viewer.play' : 'viewer.pause')}
+          onclick={() => this.setPaused(!this.paused)}
+        >
+          <i className={classList('fas', this.paused ? 'fa-play' : 'fa-pause')} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="GlimpseViewer-icon"
+          aria-label={tx('viewer.more')}
+          aria-expanded={this.menuOpen ? 'true' : 'false'}
+          onclick={() => {
+            this.menuOpen = !this.menuOpen;
+            this.setPaused(this.menuOpen);
+          }}
+        >
+          <i className="fas fa-ellipsis" aria-hidden="true" />
+        </button>
+      </header>
+    );
+  }
+
+  private footer(story: Story, user: User | undefined, own: boolean): Mithril.Children {
+    return (
+      <footer className="GlimpseViewer-foot">
+        {story.caption() ? <p className="GlimpseViewer-caption">{caption(story)}</p> : null}
+        {story.linkUrl() ? (
+          <a className="GlimpseViewer-link" href={story.linkUrl()!} target="_blank" rel="nofollow ugc noopener noreferrer">
+            <i className="fas fa-link" aria-hidden="true" /> {hostOf(story.linkUrl()!)}
+          </a>
+        ) : null}
+        {this.reacting ? this.reactionPicker(story) : null}
+        {own ? (
+          <button type="button" className="GlimpseViewer-seen" onclick={() => this.openSeenBy(story)}>
+            <i className="fas fa-eye" aria-hidden="true" /> {t('viewer.seen_by', { count: story.viewCount() || 0 })}
+            {story.reactionCount() ? (
+              <span className="GlimpseViewer-seenReactions"> · {t('viewer.reactions', { count: story.reactionCount() })}</span>
+            ) : null}
+          </button>
+        ) : (
+          this.replyRow(story, user)
+        )}
+      </footer>
+    );
+  }
+
+  /** The reply field (when replies have somewhere to go) and the reaction button. */
+  private replyRow(story: Story, user: User | undefined): Mithril.Children {
+    const reactions = this.reactions();
+
+    return (
+      <ReplyBar
+        story={story}
+        name={user?.displayName() || ''}
+        reaction={story.myReaction() || reactions[0]}
+        reacting={this.reacting}
+        onpause={(paused: boolean) => this.setPaused(paused)}
+        onsay={(message: string) => this.say(message)}
+        onreact={() => {
+          if (reactions.length === 1) return this.react(story.myReaction() ? null : reactions[0]);
+          this.reacting = !this.reacting;
+          this.setPaused(this.reacting);
+        }}
+      />
+    );
+  }
+
+  private reactionPicker(story: Story): Mithril.Children {
+    return (
+      <div className="GlimpseViewer-reactions" role="group" aria-label={tx('viewer.react')}>
+        {this.reactions().map((reaction) => (
+          <button
+            type="button"
+            className={classList(story.myReaction() === reaction && 'is-active')}
+            aria-pressed={story.myReaction() === reaction ? 'true' : 'false'}
+            onclick={() => this.react(story.myReaction() === reaction ? null : reaction)}
+          >
+            {reaction}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  private reactions(): string[] {
+    const list = app.forum.attribute<string[]>('glimpseReactions');
+    return list?.length ? list : ['❤️'];
   }
 
   private media(story: Story): Mithril.Children {
@@ -685,27 +563,14 @@ export default class Viewer extends Component<ViewerAttrs> {
     return <video className="GlimpseViewer-preload" src={next.mediaUrl()!} preload="auto" muted playsinline aria-hidden="true" />;
   }
 
-  private menuView(story: Story, own: boolean): Mithril.Children {
-    const items: Array<[string, string, string?]> = [];
-    if (own) items.push(['highlight', 'fa-star']);
-    if (story.canReport()) items.push(['report', 'fa-flag']);
-    if (!own && app.session.user) items.push(['mute', 'fa-volume-xmark']);
-    items.push(['copy', 'fa-link']);
-    if (story.canModerate() && !own) items.push(['hide', 'fa-eye-slash', 'danger']);
-    if (story.canDelete()) items.push(['delete', 'fa-trash', 'danger']);
-
-    return (
-      <ul className="GlimpseViewer-menu" role="menu">
-        {items.map(([action, icon, tone]) => (
-          <li role="none">
-            <button type="button" role="menuitem" className={classList(tone && 'is-danger')} onclick={() => this.menu(action)}>
-              <i className={classList('fas', icon)} aria-hidden="true" />{' '}
-              {t(`viewer.menu.${action}`, { name: (story.user() || null)?.displayName() })}
-            </button>
-          </li>
-        ))}
-      </ul>
-    );
+  /** The current story was deleted: on to the next one, or the next person. */
+  private dropCurrent(): void {
+    const user = this.user();
+    this.stories.splice(this.index, 1);
+    if (user) this.cache.delete(user.id()!);
+    if (!this.stories.length) return this.nextUser();
+    this.index = Math.min(this.index, this.stories.length - 1);
+    this.begin();
   }
 
   private toggleSound(): void {
@@ -718,50 +583,4 @@ export default class Viewer extends Component<ViewerAttrs> {
     this.setPaused(true);
     openSeenBy(story, () => this.setPaused(false));
   }
-}
-
-const AUDIENCE_ICONS: Record<string, string> = {
-  everyone: 'fa-globe',
-  members: 'fa-user-check',
-  followers: 'fa-user-group',
-};
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch (e) {
-    return url;
-  }
-}
-
-/** Starts fetching a photo before it is shown (videos are preloaded by an element in the view). */
-function preload(story: Story): void {
-  if (story.kind() === 'photo' && story.mediaUrl()) {
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = story.mediaUrl()!;
-  }
-}
-
-let mounted: HTMLElement | null = null;
-
-/** Opens the viewer over the page. One at a time. */
-export function openViewer(options: ViewerOptions): void {
-  closeViewer();
-  mounted = document.createElement('div');
-  mounted.className = 'GlimpseViewer-root';
-  document.body.appendChild(mounted);
-  const close = () => {
-    closeViewer();
-    options.onclose?.();
-    m.redraw();
-  };
-  m.mount(mounted, { view: () => <Viewer options={options} close={close} /> });
-}
-
-export function closeViewer(): void {
-  if (!mounted) return;
-  m.mount(mounted, null);
-  mounted.remove();
-  mounted = null;
 }

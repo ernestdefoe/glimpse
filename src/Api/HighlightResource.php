@@ -6,6 +6,7 @@ namespace ErnestDefoe\Glimpse\Api;
 
 use Carbon\Carbon;
 use ErnestDefoe\Glimpse\Config;
+use ErnestDefoe\Glimpse\Flags;
 use ErnestDefoe\Glimpse\Highlight;
 use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Story;
@@ -39,6 +40,7 @@ class HighlightResource extends AbstractDatabaseResource
         private readonly Config $config,
         private readonly TranslatorInterface $translator,
         private readonly ConnectionInterface $db,
+        private readonly Flags $flags,
     ) {
     }
 
@@ -106,7 +108,8 @@ class HighlightResource extends AbstractDatabaseResource
                 ->type('stories')
                 ->includable()
                 ->writable()
-                ->scope(fn (Builder|Relation $query, Context $context) => $query->whereVisibleTo($context->getActor()))
+                // The viewer's visibility rule and flags (seen, reaction), and the media: one query for every story.
+                ->scope(fn (Builder|Relation $query, Context $context) => $this->scopeStories($query, $context))
                 // Checked before the highlight is written; synced (instead of Flarum's plain sync) after.
                 ->set(fn (Highlight $highlight, array $stories, Context $context) => $this->checkStories($highlight, $stories, $context))
                 ->save(fn (Highlight $highlight, array $stories, Context $context) => $this->saveStories($highlight, $stories, $context)),
@@ -127,6 +130,15 @@ class HighlightResource extends AbstractDatabaseResource
         $model->created_at = Carbon::now();
 
         return $model;
+    }
+
+    /** @param Builder<Story>|Relation<Story, Highlight, mixed> $query */
+    private function scopeStories(Builder|Relation $query, Context $context): void
+    {
+        $stories = $query instanceof Relation ? $query->getQuery() : $query;
+        $actor = $context->getActor();
+        $stories->whereVisibleTo($actor)->select('glimpse_stories.*')->with('media');
+        $this->flags->apply($stories, $actor);
     }
 
     /**

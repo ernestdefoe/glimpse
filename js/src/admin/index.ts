@@ -1,10 +1,12 @@
 import app from 'flarum/admin/app';
 import Extend from 'flarum/common/extenders';
+import type ExtensionPage from 'flarum/admin/components/ExtensionPage';
+import { has } from '../common/runtime';
 
 const EXT = 'ernestdefoe-glimpse';
 const t = (key: string) => app.translator.trans(`${EXT}.admin.${key}`, {}, true);
 const setting = (key: string) => `${EXT}.${key}`;
-const installed = (id: string) => id in ((globalThis as any).flarum?.extensions || {});
+const installed = has;
 
 const options = (keys: string[], prefix: string) => Object.fromEntries(keys.map((key) => [key, t(`${prefix}.${key}`)]));
 
@@ -63,7 +65,7 @@ export const extend = [
       }),
       70
     )
-    .customSetting(function (this: any) {
+    .customSetting(function (this: ExtensionPage) {
       if (!installed('fof-ignore-users')) return null;
       return this.buildSettingComponent({
         setting: setting('ignore_hides'),
@@ -73,7 +75,7 @@ export const extend = [
       });
     }, 69)
     .setting(() => ({ setting: setting('reactions'), type: 'text', label: t('reactions'), help: t('reactions_help') }), 60)
-    .customSetting(function (this: any) {
+    .customSetting(function (this: ExtensionPage) {
       const channels = ['auto', ...(installed('ernestdefoe-parley') ? ['parley'] : []), ...(installed('flarum-messages') ? ['messages'] : []), 'off'];
       return this.buildSettingComponent({
         setting: setting('reply_via'),
@@ -86,7 +88,7 @@ export const extend = [
     }, 59)
     .setting(() => ({ setting: setting('approval_posts'), type: 'number', min: 0, label: t('approval_posts'), help: t('approval_help') }), 50)
     .setting(() => ({ setting: setting('approval_days'), type: 'number', min: 0, label: t('approval_days') }), 49)
-    .customSetting(function (this: any) {
+    .customSetting(function (this: ExtensionPage) {
       if (!installed('ernestdefoe-trust-levels')) return null;
       return this.buildSettingComponent({
         setting: setting('approval_trust_level'),
@@ -96,7 +98,7 @@ export const extend = [
         label: t('approval_trust_level'),
       });
     }, 48)
-    .customSetting(function (this: any) {
+    .customSetting(function (this: ExtensionPage) {
       if (!installed('ianm-follow-users')) return null;
       return [
         this.buildSettingComponent({

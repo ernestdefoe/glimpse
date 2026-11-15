@@ -15,6 +15,8 @@ use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
@@ -58,6 +60,7 @@ class StoryReportResource extends AbstractDatabaseResource
                 ->authenticated()
                 ->can('glimpse.moderate')
                 ->defaultInclude(['story', 'story.user', 'user'])
+                ->eagerLoad(['story.media'])
                 ->defaultSort('-createdAt')
                 ->paginate(20, 50),
             Endpoint\Create::make()
@@ -97,6 +100,16 @@ class StoryReportResource extends AbstractDatabaseResource
         return [
             SortColumn::make('createdAt'),
         ];
+    }
+
+    /** A second report racing the first one hits the unique key: the same answer as the check above. */
+    protected function saveModel(Model $model, BaseContext $context): void
+    {
+        try {
+            parent::saveModel($model, $context);
+        } catch (UniqueConstraintViolationException) {
+            throw new ValidationException(['reason' => $this->translator->trans('ernestdefoe-glimpse.api.already_reported')]);
+        }
     }
 
     /** @param Context $context */

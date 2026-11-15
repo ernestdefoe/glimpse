@@ -10,22 +10,20 @@ import { failed, onStoriesChanged, t, tx, ui } from './util';
 
 export interface Ring {
   user: User;
-  stories: Story[];
-  unseen: boolean;
-  followed: boolean;
-  latest: number;
+  /** The author's newest live story (the bar loads one per person; the viewer loads the rest). */
+  latest: Story;
 }
 
 /** The bar's data, shared by every bar on the page (the index, a widget), loaded with one request. */
 export const bar = {
   rings: [] as Ring[],
-  mine: [] as Story[],
+  mine: null as Story | null,
   loaded: false,
   loading: null as Promise<void> | null,
 
   load(): Promise<void> {
     this.loading ??= app.store
-      .find<Story[]>('stories', { filter: { bar: '1' }, page: { limit: 100, total: 0 } } as any)
+      .find<Story[]>('stories', { filter: { bar: '1' }, page: { limit: 30, total: 0 } })
       .then((stories) => this.group(stories as Story[]))
       .catch(failed)
       .finally(() => {
@@ -39,35 +37,26 @@ export const bar = {
 
   group(stories: Story[]): void {
     const me = app.session.user;
-    const byAuthor = new Map<string, Ring>();
-    this.mine = [];
+    this.mine = null;
+    this.rings = [];
 
     stories.forEach((story) => {
       const user = story.user();
       if (!user) return;
-      if (me && user === me) {
-        this.mine.push(story);
-        return;
-      }
-      const ring = byAuthor.get(user.id()!) || { user, stories: [], unseen: false, followed: story.authorFollowed(), latest: 0 };
-      ring.stories.push(story);
-      ring.latest = Math.max(ring.latest, story.createdAt()?.getTime() || 0);
-      byAuthor.set(user.id()!, ring);
+      if (me && user === me) this.mine = story;
+      else this.rings.push({ user, latest: story });
     });
-
-    this.rings = [...byAuthor.values()];
-    this.mine.sort((a, b) => (a.createdAt()?.getTime() || 0) - (b.createdAt()?.getTime() || 0));
   },
 
   /** The ring order: unseen first, then people you follow, then newest; or simply newest (admin's choice). */
   ordered(): Ring[] {
-    this.rings.forEach((ring) => (ring.unseen = ring.stories.some((story) => !story.isSeen())));
     const smart = app.forum.attribute('glimpseBarOrder') !== 'newest';
+    const time = (ring: Ring) => ring.latest.createdAt()?.getTime() || 0;
 
     return [...this.rings].sort((a, b) => {
-      if (smart && a.unseen !== b.unseen) return a.unseen ? -1 : 1;
-      if (smart && a.followed !== b.followed) return a.followed ? -1 : 1;
-      return b.latest - a.latest;
+      const unseen = Number(!!b.latest.authorHasUnseen()) - Number(!!a.latest.authorHasUnseen());
+      const followed = Number(b.latest.authorFollowed()) - Number(a.latest.authorFollowed());
+      return (smart && unseen) || (smart && followed) || time(b) - time(a);
     });
   },
 };
@@ -92,9 +81,8 @@ export default class RingBar extends Component<RingBarAttrs> {
   view() {
     const canCreate = !!app.forum.attribute('glimpseCanCreate');
     const rings = bar.ordered();
-    const me = app.session.user;
 
-    if (bar.loaded && !rings.length && !bar.mine.length && !canCreate) return null;
+    if (bar.loaded && !rings.length && !bar.mine && !canCreate) return null;
 
     return (
       <section className={classList('GlimpseBar', this.attrs.compact && 'GlimpseBar--compact')} aria-label={tx('bar.label')}>
@@ -107,63 +95,75 @@ export default class RingBar extends Component<RingBarAttrs> {
           </div>
         )}
         <ul className="GlimpseBar-rings">
-          {me && (canCreate || bar.mine.length) ? (
-            <li className="GlimpseBar-item">
-              <button
-                type="button"
-                className={classList('GlimpseRing', !bar.mine.length && 'GlimpseRing--empty')}
-                aria-label={bar.mine.length ? tx('bar.your_story') : tx('bar.add')}
-                onclick={() => (bar.mine.length ? this.openMine() : ui().then((chunk) => chunk.openCreate()))}
-              >
-                <span className="GlimpseRing-avatar">
-                  <Avatar user={me} />
-                </span>
-              </button>
-              {canCreate && bar.mine.length ? (
-                // A sibling, not inside the ring: a button can't hold another button.
-                <button
-                  type="button"
-                  className="GlimpseRing-plus"
-                  aria-label={tx('bar.add')}
-                  onclick={() => ui().then((chunk) => chunk.openCreate())}
-                >
-                  <i className="fas fa-plus" aria-hidden="true" />
-                </button>
-              ) : canCreate ? (
-                <span className="GlimpseRing-plus" aria-hidden="true">
-                  <i className="fas fa-plus" />
-                </span>
-              ) : null}
-              <span className="GlimpseRing-name">{t('bar.your_story')}</span>
-            </li>
-          ) : null}
-          {rings.map((ring) => (
-            <li className="GlimpseBar-item">
-              <button
-                type="button"
-                className={classList('GlimpseRing', !ring.unseen && 'GlimpseRing--seen')}
-                aria-label={tx(ring.unseen ? 'bar.ring_new' : 'bar.ring_seen', { name: ring.user.displayName() })}
-                onclick={() => this.open(rings, ring)}
-              >
-                <span className="GlimpseRing-avatar">
-                  <Avatar user={ring.user} />
-                </span>
-              </button>
-              <span className={classList('GlimpseRing-name', !ring.unseen && 'GlimpseRing-name--seen')}>{ring.user.displayName()}</span>
-            </li>
-          ))}
+          {this.ownRing(canCreate)}
+          {rings.map((ring) => this.ring(rings, ring))}
           {!bar.loaded ? <li className="GlimpseBar-item GlimpseBar-item--loading" aria-hidden="true" /> : null}
         </ul>
       </section>
     );
   }
 
+  /** Your own ring: plays your stories, or (with nothing posted) opens the create sheet. */
+  private ownRing(canCreate: boolean): Mithril.Children {
+    const me = app.session.user;
+    if (!me || (!canCreate && !bar.mine)) return null;
+    const create = () => ui().then((chunk) => chunk.openCreate());
+
+    return (
+      <li className="GlimpseBar-item">
+        <button
+          type="button"
+          className={classList('GlimpseRing', !bar.mine && 'GlimpseRing--empty')}
+          aria-label={bar.mine ? tx('bar.your_story') : tx('bar.add')}
+          onclick={() => (bar.mine ? this.openMine() : create())}
+        >
+          <span className="GlimpseRing-avatar">
+            <Avatar user={me} />
+          </span>
+        </button>
+        {canCreate && bar.mine ? (
+          // A sibling, not inside the ring: a button can't hold another button.
+          <button type="button" className="GlimpseRing-plus" aria-label={tx('bar.add')} onclick={create}>
+            <i className="fas fa-plus" aria-hidden="true" />
+          </button>
+        ) : null}
+        {canCreate && !bar.mine ? (
+          <span className="GlimpseRing-plus" aria-hidden="true">
+            <i className="fas fa-plus" />
+          </span>
+        ) : null}
+        <span className="GlimpseRing-name">{t('bar.your_story')}</span>
+      </li>
+    );
+  }
+
+  private ring(rings: Ring[], ring: Ring): Mithril.Children {
+    const unseen = !!ring.latest.authorHasUnseen();
+
+    return (
+      <li className="GlimpseBar-item">
+        <button
+          type="button"
+          className={classList('GlimpseRing', !unseen && 'GlimpseRing--seen')}
+          aria-label={tx(unseen ? 'bar.ring_new' : 'bar.ring_seen', { name: ring.user.displayName() })}
+          onclick={() => this.open(rings, ring)}
+        >
+          <span className="GlimpseRing-avatar">
+            <Avatar user={ring.user} />
+          </span>
+        </button>
+        <span className={classList('GlimpseRing-name', !unseen && 'GlimpseRing-name--seen')}>{ring.user.displayName()}</span>
+      </li>
+    );
+  }
+
   open(rings: Ring[], ring: Ring): void {
-    ui().then((chunk) => chunk.openViewer({ users: rings.map((r) => r.user), start: ring.user }));
+    // Closing the viewer reloads the bar, so what was just seen turns grey.
+    ui().then((chunk) => chunk.openViewer({ users: rings.map((r) => r.user), start: ring.user, onclose: () => bar.load() }));
   }
 
   openMine(): void {
     const me = app.session.user;
-    if (me) ui().then((chunk) => chunk.openViewer({ users: [me], start: me, stories: bar.mine }));
+    if (me) ui().then((chunk) => chunk.openViewer({ users: [me], start: me, onclose: () => bar.load() }));
   }
 }

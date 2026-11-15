@@ -15,11 +15,16 @@ declare(strict_types=1);
  * autoload during boot and fatal every request while a deploy swaps composer's autoload map.
  */
 
+use ErnestDefoe\Glimpse\Access\HideFromIgnored;
+use ErnestDefoe\Glimpse\Access\HideSuspendedAuthors;
 use ErnestDefoe\Glimpse\Access\ScopeStoryVisibility;
 use ErnestDefoe\Glimpse\Access\StoryPolicy;
 use ErnestDefoe\Glimpse\Api;
+use ErnestDefoe\Glimpse\Approval\TrustLevelsServiceProvider;
 use ErnestDefoe\Glimpse\Console\PruneCommand;
 use ErnestDefoe\Glimpse\Event\Published;
+use ErnestDefoe\Glimpse\Follows\FollowsServiceProvider;
+use ErnestDefoe\Glimpse\GlimpseServiceProvider;
 use ErnestDefoe\Glimpse\Http\MediaController;
 use ErnestDefoe\Glimpse\Listener\DeleteMemberData;
 use ErnestDefoe\Glimpse\Listener\QueueNotifications;
@@ -87,8 +92,31 @@ return [
         ->addFilter(Search\StorySearcher::class, Search\Filter\LiveFilter::class)
         ->addFilter(Search\StorySearcher::class, Search\Filter\AuthorFilter::class)
         ->addFilter(Search\StorySearcher::class, Search\Filter\StatusFilter::class)
-        ->addFilter(Search\StorySearcher::class, Search\Filter\ReportedFilter::class)
-        ->addFilter(Search\StorySearcher::class, Search\Filter\FollowingFilter::class),
+        ->addFilter(Search\StorySearcher::class, Search\Filter\ReportedFilter::class),
+
+    (new Extend\ServiceProvider())
+        ->register(GlimpseServiceProvider::class),
+
+    // Other extensions, each wired in only while it is enabled. Nothing else checks what's installed.
+    (new Extend\Conditional())
+        ->whenExtensionEnabled('ianm-follow-users', fn (): array => [
+            (new Extend\ServiceProvider())->register(FollowsServiceProvider::class),
+            (new Extend\SearchDriver(DatabaseSearchDriver::class))
+                ->addFilter(Search\StorySearcher::class, Search\Filter\FollowingFilter::class),
+        ])
+        ->whenExtensionEnabled('flarum-suspend', fn (): array => [
+            (new Extend\ModelVisibility(Story::class))->scope(HideSuspendedAuthors::class),
+        ])
+        ->whenExtensionEnabled('fof-ignore-users', fn (): array => [
+            (new Extend\ModelVisibility(Story::class))->scope(HideFromIgnored::class),
+        ])
+        ->whenExtensionEnabled('ernestdefoe-trust-levels', fn (): array => [
+            (new Extend\ServiceProvider())->register(TrustLevelsServiceProvider::class),
+        ])
+        // The ring bar as a Page Builder block.
+        ->whenExtensionEnabled('ernestdefoe-page-builder', fn (): array => [
+            new \Ernestdefoe\PageBuilder\Extend\PageBuilderBlock(StoriesBlock::class),
+        ]),
 
     (new Extend\Notification())
         ->type(StoryMentionedBlueprint::class, ['alert', 'email'])
@@ -125,12 +153,6 @@ return [
         ->default('ernestdefoe-glimpse.flood_seconds', 3)
         ->default('ernestdefoe-glimpse.highlights_max', 20)
         ->default('ernestdefoe-glimpse.highlight_stories_max', 100),
-
-    // The ring bar as a Page Builder block, only when Page Builder is there.
-    (new Extend\Conditional())
-        ->whenExtensionEnabled('ernestdefoe-page-builder', fn (): array => [
-            new \Ernestdefoe\PageBuilder\Extend\PageBuilderBlock(StoriesBlock::class),
-        ]),
 
     (new Extend\Console())
         ->command(PruneCommand::class)

@@ -72,6 +72,15 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function an_mp4_that_does_not_declare_its_length_is_refused(): void
+    {
+        // A valid ftyp box and then junk: no moov, so no duration to check against the limit.
+        $junk = pack('N', 20).'ftypisom'.pack('N', 0).'isom'.pack('N', 16).'mdat'.str_repeat("\0", 8);
+        $this->assertSame(422, $this->upload(2, $junk, 'clip.mp4', 'video/mp4')->getStatusCode());
+        $this->assertSame(0, StoryMedia::query()->count());
+    }
+
+    #[Test]
     public function a_webm_loses_its_tags(): void
     {
         $original = $this->fixture('tagged.webm');

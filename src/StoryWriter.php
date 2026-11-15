@@ -6,10 +6,11 @@ namespace ErnestDefoe\Glimpse;
 
 use Carbon\Carbon;
 use ErnestDefoe\Glimpse\Enum\Audience;
-use ErnestDefoe\Glimpse\Enum\Kind;
 use ErnestDefoe\Glimpse\Enum\Status;
 use ErnestDefoe\Glimpse\Event\Published;
 use ErnestDefoe\Glimpse\Event\Removed;
+use ErnestDefoe\Glimpse\Follows\FollowGraph;
+use ErnestDefoe\Glimpse\Approval\Approval;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Flarum\User\User;
@@ -26,7 +27,9 @@ class StoryWriter
 {
     public function __construct(
         private readonly Config $config,
-        private readonly Extensions $extensions,
+        private readonly FollowGraph $follows,
+        private readonly Approval $approval,
+        private readonly PendingCount $pending,
         private readonly TranslatorInterface $translator,
         private readonly Dispatcher $events,
         private readonly Cleanup $cleanup,
@@ -66,7 +69,7 @@ class StoryWriter
         if ($story->getAttribute('audience') === null) {
             $story->audience = $this->config->defaultAudience();
         }
-        if ($story->audience === Audience::Followers && ! $this->extensions->follows()) {
+        if ($story->audience === Audience::Followers && ! $this->follows->available()) {
             $this->fail('audience', 'followers_off');
         }
 
@@ -78,7 +81,7 @@ class StoryWriter
         $story->user_id = $actor->id;
         $story->created_at = Carbon::now();
 
-        if ($this->needsApproval($actor)) {
+        if ($this->approval->holds($actor)) {
             $story->status = Status::Pending;
         } else {
             $this->goLive($story);
@@ -92,6 +95,8 @@ class StoryWriter
 
         if ($story->status === Status::Live) {
             $this->events->dispatch(new Published($story, $actor));
+        } else {
+            $this->pending->forget();
         }
     }
 
@@ -104,6 +109,7 @@ class StoryWriter
         if ($to === Status::Pending || $to === $from) {
             return;
         }
+        $story->afterSave(fn () => $this->pending->forget());
 
         if ($to === Status::Hidden) {
             $story->status = Status::Hidden;
@@ -129,6 +135,9 @@ class StoryWriter
         $actor->assertCan('delete', $story);
 
         $this->cleanup->stories([$story->id]);
+        if ($story->status === Status::Pending) {
+            $this->pending->forget();
+        }
 
         $this->events->dispatch(new Removed($story, $actor));
     }
@@ -139,21 +148,6 @@ class StoryWriter
         $story->status = Status::Live;
         $story->approved_at = $now;
         $story->expires_at = $now->copy()->addHours($this->config->lifetimeHours());
-    }
-
-    private function needsApproval(User $actor): bool
-    {
-        if ($actor->hasPermission('glimpse.skipApproval')) {
-            return false;
-        }
-
-        $posts = $this->config->approvalPosts();
-        $days = $this->config->approvalDays();
-        $level = $this->config->approvalTrustLevel();
-
-        return ($posts > 0 && (int) $actor->comment_count < $posts)
-            || ($days > 0 && ($actor->joined_at === null || $actor->joined_at->greaterThan(Carbon::now()->subDays($days))))
-            || ($level > 0 && $this->extensions->trustLevels() && Ids::one($actor->getAttribute('trust_level')) < $level);
     }
 
     /** The members a caption names with @username, if they can see the story. */

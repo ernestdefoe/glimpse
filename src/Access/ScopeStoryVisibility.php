@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace ErnestDefoe\Glimpse\Access;
 
 use Carbon\Carbon;
-use ErnestDefoe\Glimpse\Config;
 use ErnestDefoe\Glimpse\Enum\Audience;
 use ErnestDefoe\Glimpse\Enum\Status;
-use ErnestDefoe\Glimpse\Extensions;
+use ErnestDefoe\Glimpse\Follows\FollowGraph;
 use ErnestDefoe\Glimpse\Story;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,16 +21,15 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  * - An author sees all of their own.
  * - Everyone else needs `glimpse.view`, and sees a story when it is live (approved, not hidden) and
  *   either unexpired or kept in one of its author's highlights, and its audience lets them in:
- *   everyone; members (signed in); followers (ianm/follow-users; without it, nobody else).
- * - A suspended author's stories are hidden while the suspension lasts (flarum/suspend), and with the
- *   admin's switch on, an author who ignores you hides their stories from you (fof/ignore-users).
+ *   everyone; members (signed in); followers (the FollowGraph; without a follow extension, nobody else).
+ *
+ * flarum/suspend and fof/ignore-users add their own scopes while they're enabled (HideSuspendedAuthors,
+ * HideFromIgnored), so this rule never asks which extensions are on.
  */
 class ScopeStoryVisibility
 {
-    public function __construct(
-        private readonly Extensions $extensions,
-        private readonly Config $config,
-    ) {
+    public function __construct(private readonly FollowGraph $follows)
+    {
     }
 
     /** @param Builder<Story> $query */
@@ -75,24 +73,10 @@ class ScopeStoryVisibility
 
                 $q->orWhere('glimpse_stories.audience', Audience::Members->value);
 
-                if ($this->extensions->follows()) {
+                if ($this->follows->available()) {
                     $q->orWhere(fn (Builder $f) => $f->where('glimpse_stories.audience', Audience::Followers->value)
-                        ->whereIn('glimpse_stories.user_id', fn (QueryBuilder $followed) => $followed->select('followed_user_id')
-                            ->from('user_followers')
-                            ->where('user_id', $actor->id)));
+                        ->whereIn('glimpse_stories.user_id', $this->follows->followedBy($actor->id)));
                 }
             });
-
-        if ($this->extensions->suspend()) {
-            $query->whereNotIn('glimpse_stories.user_id', fn (QueryBuilder $suspended) => $suspended->select('id')
-                ->from('users')
-                ->where('suspended_until', '>', $now));
-        }
-
-        if (! $actor->isGuest() && $this->extensions->ignores() && $this->config->ignoreHidesMine()) {
-            $query->whereNotIn('glimpse_stories.user_id', fn (QueryBuilder $ignoring) => $ignoring->select('user_id')
-                ->from('ignored_user')
-                ->where('ignored_user_id', $actor->id));
-        }
     }
 }

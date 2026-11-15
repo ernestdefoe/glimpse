@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErnestDefoe\Glimpse;
 
+use ErnestDefoe\Glimpse\Follows\FollowGraph;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -14,7 +15,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  */
 class Flags
 {
-    public function __construct(private readonly Extensions $extensions)
+    public function __construct(private readonly FollowGraph $follows)
     {
     }
 
@@ -39,11 +40,10 @@ class Flags
             'glimpse_reaction' => $mine('reaction'),
         ]);
 
-        if ($this->extensions->follows()) {
+        if ($this->follows->available()) {
             $query->addSelect(['glimpse_followed' => fn (QueryBuilder $follow) => $follow->selectRaw('1')
-                ->from('user_followers')
-                ->whereColumn('user_followers.followed_user_id', 'glimpse_stories.user_id')
-                ->where('user_followers.user_id', $actor->id)
+                ->fromSub($this->follows->followedBy($actor->id), 'glimpse_follows')
+                ->whereColumn('glimpse_follows.followed_user_id', 'glimpse_stories.user_id')
                 ->limit(1)]);
         }
 

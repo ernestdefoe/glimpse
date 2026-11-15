@@ -2,6 +2,7 @@ import app from 'flarum/forum/app';
 import { extend } from 'flarum/common/extend';
 import LinkButton from 'flarum/common/components/LinkButton';
 import type ItemList from 'flarum/common/utils/ItemList';
+import type UserPage from 'flarum/forum/components/UserPage';
 import type Mithril from 'mithril';
 import RingBar from './RingBar';
 import { registerWidgets } from './widgets';
@@ -62,7 +63,7 @@ app.initializers.add('ernestdefoe-glimpse', () => {
     }
   });
 
-  extend('flarum/forum/components/UserPage', 'navItems', function (this: any, items: ItemList<Mithril.Children>) {
+  extend('flarum/forum/components/UserPage', 'navItems', function (this: UserPage, items: ItemList<Mithril.Children>) {
     if (!this.user || !app.forum.attribute('glimpseCanView')) return;
     items.add(
       'glimpse',
@@ -73,7 +74,11 @@ app.initializers.add('ernestdefoe-glimpse', () => {
     );
   });
 
-  extend('flarum/forum/components/NotificationGrid', 'notificationTypes', function (items: ItemList<any>) {
-    Object.entries(NOTIFICATIONS).forEach(([name, icon]) => items.add(name, { name, icon, label: t(`notifications.${name}_preference`) }));
-  });
+  extend(
+    'flarum/forum/components/NotificationGrid',
+    'notificationTypes',
+    function (items: ItemList<{ name: string; icon: string; label: Mithril.Children }>) {
+      Object.entries(NOTIFICATIONS).forEach(([name, icon]) => items.add(name, { name, icon, label: t(`notifications.${name}_preference`) }));
+    }
+  );
 });

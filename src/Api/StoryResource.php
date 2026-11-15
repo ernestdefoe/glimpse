@@ -11,6 +11,7 @@ use ErnestDefoe\Glimpse\Enum\Status;
 use ErnestDefoe\Glimpse\Flags;
 use ErnestDefoe\Glimpse\Story;
 use ErnestDefoe\Glimpse\StoryWriter;
+use ErnestDefoe\Glimpse\UnseenAuthors;
 use Flarum\Api\Context;
 use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
@@ -42,6 +43,7 @@ class StoryResource extends AbstractDatabaseResource
         private readonly UrlGenerator $url,
         private readonly StoryWriter $writer,
         private readonly Engagement $engagement,
+        private readonly UnseenAuthors $unseen,
     ) {
     }
 
@@ -112,8 +114,16 @@ class StoryResource extends AbstractDatabaseResource
 
     public function fields(): array
     {
-        $insider = fn (Story $story, Context $context): bool => $context->getActor()->can('seeViewers', $story);
+        return [...$this->inputs(), ...$this->media(), ...$this->forViewer(), ...$this->abilities(), ...$this->relationships()];
+    }
 
+    /**
+     * What a member sends (on create), and what a moderator changes (status).
+     *
+     * @return list<Schema\Attribute|Schema\Relationship\ToOne|Schema\Relationship\ToMany>
+     */
+    private function inputs(): array
+    {
         return [
             Schema\Str::make('kind')
                 ->requiredOnCreate()
@@ -148,10 +158,19 @@ class StoryResource extends AbstractDatabaseResource
                 ->in([Status::Live->value, Status::Hidden->value])
                 ->get(fn (Story $story): string => $story->status->value)
                 ->set(fn (Story $story, string $value, Context $context) => $this->writer->moderate($story, Status::from($value), $context->getActor())),
-
             Schema\DateTime::make('createdAt')->property('created_at'),
             Schema\DateTime::make('expiresAt')->property('expires_at')->nullable(),
+        ];
+    }
 
+    /**
+     * The photo or video, served by Http\MediaController.
+     *
+     * @return list<Schema\Attribute|Schema\Relationship\ToOne|Schema\Relationship\ToMany>
+     */
+    private function media(): array
+    {
+        return [
             Schema\Str::make('mediaUrl')
                 ->nullable()
                 ->get(fn (Story $story): ?string => $story->media_id === null ? null : $this->url->to('forum')->route('glimpse.media', ['id' => $story->media_id])),
@@ -159,12 +178,38 @@ class StoryResource extends AbstractDatabaseResource
             Schema\Integer::make('width')->nullable()->get(fn (Story $story): ?int => $story->media?->width),
             Schema\Integer::make('height')->nullable()->get(fn (Story $story): ?int => $story->media?->height),
             Schema\Integer::make('durationMs')->nullable()->get(fn (Story $story): ?int => $story->media?->duration_ms),
+        ];
+    }
 
+    /**
+     * What the story means to the person looking.
+     *
+     * @return list<Schema\Attribute|Schema\Relationship\ToOne|Schema\Relationship\ToMany>
+     */
+    private function forViewer(): array
+    {
+        return [
             // What it means to the viewer: from subselects on the story query (Flags), no queries here.
             Schema\Boolean::make('isSeen')->get(fn (Story $story): bool => Flags::seen($story)),
             Schema\Str::make('myReaction')->nullable()->get(fn (Story $story): ?string => Flags::reaction($story)),
             Schema\Boolean::make('authorFollowed')->get(fn (Story $story): bool => Flags::followed($story)),
+            // The ring bar only: whether the author has anything the viewer hasn't seen (one query per page).
+            Schema\Boolean::make('authorHasUnseen')
+                ->visible(fn (Story $story, Context $context): bool => is_array($filter = $context->queryParam('filter')) && isset($filter['bar']))
+                ->get(fn (Story $story, Context $context): \Closure => $this->unseen->defer($context->request, $context->getActor(), $story->user_id)),
+        ];
+    }
 
+    /**
+     * What the viewer may do, and the counts only its author and moderators see.
+     *
+     * @return list<Schema\Attribute|Schema\Relationship\ToOne|Schema\Relationship\ToMany>
+     */
+    private function abilities(): array
+    {
+        $insider = fn (Story $story, Context $context): bool => $context->getActor()->can('seeViewers', $story);
+
+        return [
             // Its author and moderators only.
             Schema\Integer::make('viewCount')->property('view_count')->visible($insider),
             Schema\Integer::make('reactionCount')->property('reaction_count')->visible($insider),
@@ -174,7 +219,17 @@ class StoryResource extends AbstractDatabaseResource
             Schema\Boolean::make('canReact')->get(fn (Story $story, Context $context): bool => $context->getActor()->can('react', $story)),
             Schema\Boolean::make('canReport')->get(fn (Story $story, Context $context): bool => $context->getActor()->can('report', $story)),
             Schema\Boolean::make('canSeeViewers')->get($insider),
+        ];
+    }
 
+    /**
+     * The author, the upload (write-only), and the members the caption mentions.
+     *
+     * @return list<Schema\Attribute|Schema\Relationship\ToOne|Schema\Relationship\ToMany>
+     */
+    private function relationships(): array
+    {
+        return [
             Schema\Relationship\ToOne::make('user')
                 ->type('users')
                 ->includable(),

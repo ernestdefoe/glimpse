@@ -25,6 +25,8 @@ export default class Story extends Model {
   isSeen = Model.attribute<boolean>('isSeen');
   myReaction = Model.attribute<string | null>('myReaction');
   authorFollowed = Model.attribute<boolean>('authorFollowed');
+  /** The ring bar only: whether the author has a live story the viewer hasn't seen. */
+  authorHasUnseen = Model.attribute<boolean | undefined>('authorHasUnseen');
   viewCount = Model.attribute<number | undefined>('viewCount');
   reactionCount = Model.attribute<number | undefined>('reactionCount');
 

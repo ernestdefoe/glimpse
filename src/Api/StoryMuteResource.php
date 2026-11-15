@@ -13,6 +13,8 @@ use Flarum\Api\Schema;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
@@ -66,6 +68,16 @@ class StoryMuteResource extends AbstractDatabaseResource
                 ->requiredOnCreate()
                 ->writableOnCreate(),
         ];
+    }
+
+    /** Muting twice at once hits the unique key: the same answer as the check below. */
+    protected function saveModel(Model $model, BaseContext $context): void
+    {
+        try {
+            parent::saveModel($model, $context);
+        } catch (UniqueConstraintViolationException) {
+            throw new ValidationException(['mutedUser' => $this->translator->trans('ernestdefoe-glimpse.api.cannot_mute')]);
+        }
     }
 
     /** @param Context $context */

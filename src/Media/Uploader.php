@@ -47,6 +47,30 @@ class Uploader
 
     public function upload(User $actor, UploadedFileInterface $file): StoryMedia
     {
+        [$bytes, $type] = $this->read($file);
+
+        $media = new StoryMedia();
+        $media->user_id = $actor->id;
+        $media->kind = $type['kind'];
+        $media->created_at = Carbon::now();
+
+        $type['kind'] === 'image'
+            ? $this->storeImage($media, $bytes, $type['format'] === 'gif')
+            : $this->storeVideo($media, $bytes, $type['format']);
+
+        $media->save();
+
+        return $media;
+    }
+
+    /**
+     * The upload's bytes and real type, after the size checks: the overall cap before anything is read,
+     * the cap for its kind once the first bytes say what it is.
+     *
+     * @return array{0: string, 1: array{kind: 'image'|'video', format: 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm'}}
+     */
+    private function read(UploadedFileInterface $file): array
+    {
         if ($file->getError() !== UPLOAD_ERR_OK) {
             $this->fail('upload_failed');
         }
@@ -63,43 +87,43 @@ class Uploader
             $this->fail('bad_type');
         }
 
-        $max = $type['kind'] === 'image' ? $this->config->imageMaxBytes() : $this->config->videoMaxBytes();
-        if ($size > $max) {
+        if ($size > ($type['kind'] === 'image' ? $this->config->imageMaxBytes() : $this->config->videoMaxBytes())) {
             $this->fail('too_large');
         }
 
         $stream->rewind();
-        $bytes = $stream->getContents();
 
-        $media = new StoryMedia();
-        $media->user_id = $actor->id;
-        $media->kind = $type['kind'];
-        $media->created_at = Carbon::now();
+        return [$stream->getContents(), $type];
+    }
 
-        if ($type['kind'] === 'image') {
-            [$encoded, $width, $height, $gif] = $this->image($bytes, $type['format'] === 'gif');
-            $media->mime = $gif ? 'image/gif' : 'image/webp';
-            $media->width = $width;
-            $media->height = $height;
-            $media->path = $this->storage->put($encoded, $gif ? 'gif' : 'webp');
-            $media->size = strlen($encoded);
-        } else {
-            $clean = $type['format'] === 'mp4' ? $this->mp4->scrub($bytes) : $this->webm->scrub($bytes);
-            if ($clean === null) {
-                $this->fail('bad_type');
-            }
-            if ($clean['durationMs'] !== null && $clean['durationMs'] > $this->config->videoMaxSeconds() * 1000 + 500) {
-                $this->fail('too_long', ['{max}' => $this->config->videoMaxSeconds()]);
-            }
-            $media->mime = $type['format'] === 'mp4' ? 'video/mp4' : 'video/webm';
-            $media->duration_ms = $clean['durationMs'];
-            $media->path = $this->storage->put($clean['bytes'], $type['format']);
-            $media->size = strlen($clean['bytes']);
+    private function storeImage(StoryMedia $media, string $bytes, bool $gif): void
+    {
+        [$encoded, $width, $height, $stayedGif] = $this->image($bytes, $gif);
+        $media->mime = $stayedGif ? 'image/gif' : 'image/webp';
+        $media->width = $width;
+        $media->height = $height;
+        $media->path = $this->storage->put($encoded, $stayedGif ? 'gif' : 'webp');
+        $media->size = strlen($encoded);
+    }
+
+    /** @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format */
+    private function storeVideo(StoryMedia $media, string $bytes, string $format): void
+    {
+        $clean = $format === 'mp4' ? $this->mp4->scrub($bytes) : $this->webm->scrub($bytes);
+        // An MP4 always declares its length (moov/mvhd): one that doesn't isn't a video we can check.
+        // A WebM straight from a browser's recorder declares none; it is still capped by size, and the
+        // viewer never plays past the admin's limit.
+        if ($clean === null || ($format === 'mp4' && $clean['durationMs'] === null)) {
+            $this->fail('bad_type');
+        }
+        if ($clean['durationMs'] !== null && $clean['durationMs'] > $this->config->videoMaxSeconds() * 1000 + 500) {
+            $this->fail('too_long', ['{max}' => $this->config->videoMaxSeconds()]);
         }
 
-        $media->save();
-
-        return $media;
+        $media->mime = $format === 'mp4' ? 'video/mp4' : 'video/webm';
+        $media->duration_ms = $clean['durationMs'];
+        $media->path = $this->storage->put($clean['bytes'], $format === 'mp4' ? 'mp4' : 'webm');
+        $media->size = strlen($clean['bytes']);
     }
 
     /** @return array{0: string, 1: int, 2: int, 3: bool} the encoded bytes, width, height, and whether it stayed a GIF */

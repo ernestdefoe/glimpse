@@ -14,6 +14,7 @@ use Flarum\Api\Schema;
 use Flarum\User\Exception\PermissionDeniedException;
 use Illuminate\Database\Eloquent\Builder;
 use Tobyz\JsonApiServer\Context as BaseContext;
+use Tobyz\JsonApiServer\Pagination\OffsetPagination;
 use Tobyz\JsonApiServer\Pagination\Pagination;
 
 /**
@@ -86,7 +87,7 @@ class StoryViewResource extends AbstractDatabaseResource
             ->orderByDesc('glimpse_views.viewed_at')
             ->orderByDesc('glimpse_views.user_id');
 
-        if ($pagination !== null && method_exists($pagination, 'apply')) {
+        if ($pagination instanceof OffsetPagination) {
             $pagination->apply($query);
         }
 

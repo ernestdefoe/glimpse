@@ -9,7 +9,8 @@ use ErnestDefoe\Glimpse\Enum\Kind;
 use Flarum\Settings\SettingsRepositoryInterface;
 
 /**
- * Glimpse's settings, typed and clamped to sane ranges. Defaults live in extend.php.
+ * Glimpse's settings, typed and clamped to sane ranges. The defaults are registered once, in
+ * extend.php's Extend\Settings; this class only reads and bounds what is stored.
  */
 class Config
 {
@@ -24,9 +25,16 @@ class Config
 
     public function lifetimeHours(): int
     {
-        $hours = $this->int('lifetime_hours', 24);
+        $hours = $this->int('lifetime_hours');
 
-        return in_array($hours, self::LIFETIMES, true) ? $hours : 24;
+        // A value the admin page can't produce: the nearest lifetime it offers.
+        foreach (self::LIFETIMES as $allowed) {
+            if ($hours <= $allowed) {
+                return $allowed;
+            }
+        }
+
+        return self::LIFETIMES[count(self::LIFETIMES) - 1];
     }
 
     public function allows(Kind $kind): bool
@@ -36,7 +44,7 @@ class Config
 
     public function slideSeconds(): int
     {
-        return $this->clamp($this->int('slide_seconds', 6), 2, 20);
+        return $this->clamp($this->int('slide_seconds'), 2, 20);
     }
 
     /** index, index_tags, page or none */
@@ -63,17 +71,17 @@ class Config
 
     public function imageMaxBytes(): int
     {
-        return $this->clamp($this->int('image_max_mb', 8), 1, 50) * 1024 * 1024;
+        return $this->clamp($this->int('image_max_mb'), 1, 50) * 1024 * 1024;
     }
 
     public function videoMaxBytes(): int
     {
-        return $this->clamp($this->int('video_max_mb', 20), 1, 200) * 1024 * 1024;
+        return $this->clamp($this->int('video_max_mb'), 1, 200) * 1024 * 1024;
     }
 
     public function videoMaxSeconds(): int
     {
-        return $this->clamp($this->int('video_max_seconds', 15), 3, 60);
+        return $this->clamp($this->int('video_max_seconds'), 3, 60);
     }
 
     public function defaultAudience(): Audience
@@ -101,22 +109,22 @@ class Config
     /** Seconds a member waits between uploads or stories; 0 turns the guard off. */
     public function floodSeconds(): int
     {
-        return $this->clamp($this->int('flood_seconds', 3), 0, 300);
+        return $this->clamp($this->int('flood_seconds'), 0, 300);
     }
 
     public function approvalPosts(): int
     {
-        return max(0, $this->int('approval_posts', 0));
+        return max(0, $this->int('approval_posts'));
     }
 
     public function approvalDays(): int
     {
-        return max(0, $this->int('approval_days', 0));
+        return max(0, $this->int('approval_days'));
     }
 
     public function approvalTrustLevel(): int
     {
-        return $this->clamp($this->int('approval_trust_level', 0), 0, 4);
+        return $this->clamp($this->int('approval_trust_level'), 0, 4);
     }
 
     public function notifyFollowers(): bool
@@ -126,22 +134,22 @@ class Config
 
     public function notifyCap(): int
     {
-        return $this->clamp($this->int('notify_cap', 500), 1, 5000);
+        return $this->clamp($this->int('notify_cap'), 1, 5000);
     }
 
     public function dailyLimit(): int
     {
-        return $this->clamp($this->int('daily_limit', 20), 1, 200);
+        return $this->clamp($this->int('daily_limit'), 1, 200);
     }
 
     public function highlightsMax(): int
     {
-        return $this->clamp($this->int('highlights_max', 20), 1, 100);
+        return $this->clamp($this->int('highlights_max'), 1, 100);
     }
 
     public function highlightStoriesMax(): int
     {
-        return $this->clamp($this->int('highlight_stories_max', 100), 1, 500);
+        return $this->clamp($this->int('highlight_stories_max'), 1, 500);
     }
 
     private function string(string $key): string
@@ -151,11 +159,11 @@ class Config
         return is_string($value) ? $value : '';
     }
 
-    private function int(string $key, int $default): int
+    private function int(string $key): int
     {
         $value = $this->settings->get(self::PREFIX.$key);
 
-        return is_numeric($value) ? (int) $value : $default;
+        return is_numeric($value) ? (int) $value : 0;
     }
 
     private function clamp(int $value, int $min, int $max): int

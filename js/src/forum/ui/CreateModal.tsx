@@ -5,6 +5,7 @@ import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import classList from 'flarum/common/utils/classList';
 import type Mithril from 'mithril';
 import type Story from '../models/Story';
+import type { ApiPayloadSingle } from 'flarum/common/Store';
 import type StoryMedia from '../models/StoryMedia';
 import type { Audience, Kind } from '../models/Story';
 import { has, storiesChanged, t, tx } from '../util';
@@ -57,87 +58,12 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
           {this.preview()}
         </div>
         <div className="GlimpseCreate-fields">
-          <div className="GlimpseCreate-kinds" role="tablist" aria-label={tx('create.kind_label')}>
-            {this.kinds().map((kind) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={this.kind === kind ? 'true' : 'false'}
-                className={classList('Button', this.kind === kind && 'is-active')}
-                onclick={() => this.pick(kind)}
-              >
-                <i className={classList('fas', KIND_ICONS[kind])} aria-hidden="true" /> {t(`create.kinds.${kind}`)}
-              </button>
-            ))}
-          </div>
-
+          {this.kindTabs()}
           {this.kind === 'text' ? this.textFields() : this.fileField()}
-
-          <div className="Form-group">
-            <label for="glimpse-caption">{t('create.caption')}</label>
-            <textarea
-              id="glimpse-caption"
-              name="caption"
-              className="FormControl"
-              rows={2}
-              maxlength={CAPTION_MAX}
-              value={this.caption}
-              oninput={(e: InputEvent) => {
-                this.caption = (e.target as HTMLTextAreaElement).value;
-              }}
-            />
-            <p className="helpText">{t('create.caption_help', { count: CAPTION_MAX - this.caption.length })}</p>
-          </div>
-
-          <div className="Form-group">
-            <label for="glimpse-link">{t('create.link')}</label>
-            <input
-              id="glimpse-link"
-              name="linkUrl"
-              type="url"
-              className="FormControl"
-              placeholder="https://"
-              maxlength={2000}
-              value={this.link}
-              oninput={(e: InputEvent) => {
-                this.link = (e.target as HTMLInputElement).value;
-              }}
-            />
-          </div>
-
-          <fieldset className="Form-group GlimpseCreate-audience">
-            <legend>{t('create.audience')}</legend>
-            <div className="GlimpseCreate-chips">
-              {this.audiences().map((audience) => (
-                <label className={classList('GlimpseChip', this.audience === audience && 'is-active')}>
-                  <input
-                    type="radio"
-                    name="audience"
-                    value={audience}
-                    checked={this.audience === audience}
-                    onchange={() => {
-                      this.audience = audience;
-                    }}
-                  />
-                  <i className={classList('fas', AUDIENCE_ICONS[audience])} aria-hidden="true" /> {t(`audience.${audience}`)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {has('ernestdefoe-moments') && this.kind !== 'text' ? (
-            <label className="checkbox GlimpseCreate-moments">
-              <input
-                type="checkbox"
-                checked={this.alsoMoments}
-                disabled={this.audience !== 'everyone'}
-                onchange={(e: Event) => {
-                  this.alsoMoments = (e.target as HTMLInputElement).checked;
-                }}
-              />
-              {t('create.also_moments')}
-            </label>
-          ) : null}
+          {this.captionField()}
+          {this.linkField()}
+          {this.audienceField()}
+          {this.momentsField()}
         </div>
         <div className="GlimpseCreate-foot">
           <span className="GlimpseCreate-lifetime">{t('create.lifetime', { count: app.forum.attribute('glimpseLifetimeHours') || 24 })}</span>
@@ -146,6 +72,111 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
           </Button>
         </div>
       </div>
+    );
+  }
+
+  /** Photo, video or text: only the kinds the admin turned on. */
+  private kindTabs(): Mithril.Children {
+    return (
+      <div className="GlimpseCreate-kinds" role="tablist" aria-label={tx('create.kind_label')}>
+        {this.kinds().map((kind) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={this.kind === kind ? 'true' : 'false'}
+            className={classList('Button', this.kind === kind && 'is-active')}
+            onclick={() => this.pick(kind)}
+          >
+            <i className={classList('fas', KIND_ICONS[kind])} aria-hidden="true" /> {t(`create.kinds.${kind}`)}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  /** The caption, with what is left of its length. */
+  private captionField(): Mithril.Children {
+    return (
+      <div className="Form-group">
+        <label for="glimpse-caption">{t('create.caption')}</label>
+        <textarea
+          id="glimpse-caption"
+          name="caption"
+          className="FormControl"
+          rows={2}
+          maxlength={CAPTION_MAX}
+          value={this.caption}
+          oninput={(e: InputEvent) => {
+            this.caption = (e.target as HTMLTextAreaElement).value;
+          }}
+        />
+        <p className="helpText">{t('create.caption_help', { count: CAPTION_MAX - this.caption.length })}</p>
+      </div>
+    );
+  }
+
+  /** One optional link, shown as a button on the story. */
+  private linkField(): Mithril.Children {
+    return (
+      <div className="Form-group">
+        <label for="glimpse-link">{t('create.link')}</label>
+        <input
+          id="glimpse-link"
+          name="linkUrl"
+          type="url"
+          className="FormControl"
+          placeholder="https://"
+          maxlength={2000}
+          value={this.link}
+          oninput={(e: InputEvent) => {
+            this.link = (e.target as HTMLInputElement).value;
+          }}
+        />
+      </div>
+    );
+  }
+
+  /** Who can see it: Followers only with a follow extension. */
+  private audienceField(): Mithril.Children {
+    return (
+      <fieldset className="Form-group GlimpseCreate-audience">
+        <legend>{t('create.audience')}</legend>
+        <div className="GlimpseCreate-chips">
+          {this.audiences().map((audience) => (
+            <label className={classList('GlimpseChip', this.audience === audience && 'is-active')}>
+              <input
+                type="radio"
+                name="audience"
+                value={audience}
+                checked={this.audience === audience}
+                onchange={() => {
+                  this.audience = audience;
+                }}
+              />
+              <i className={classList('fas', AUDIENCE_ICONS[audience])} aria-hidden="true" /> {t(`audience.${audience}`)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+
+  /** "Also post to Moments", for photos and videos everyone may see, when Moments is installed. */
+  private momentsField(): Mithril.Children {
+    if (!(has('ernestdefoe-moments') && this.kind !== 'text')) return null;
+
+    return (
+      <label className="checkbox GlimpseCreate-moments">
+        <input
+          type="checkbox"
+          checked={this.alsoMoments}
+          disabled={this.audience !== 'everyone'}
+          onchange={(e: Event) => {
+            this.alsoMoments = (e.target as HTMLInputElement).checked;
+          }}
+        />
+        {t('create.also_moments')}
+      </label>
     );
   }
 
@@ -256,7 +287,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
     body.append('file', file);
     this.uploading = true;
     app
-      .request<any>({
+      .request<ApiPayloadSingle>({
         method: 'POST',
         url: `${app.forum.attribute('apiUrl')}/story-media`,
         serialize: (raw: FormData) => raw,
@@ -267,7 +298,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
         if (this.file !== file) return;
         this.media = app.store.pushPayload<StoryMedia>(payload) as StoryMedia;
       })
-      .catch((error: any) => {
+      .catch((error: { response?: { errors?: Array<{ detail?: string }> } }) => {
         this.uploadError = error?.response?.errors?.[0]?.detail || tx('create.upload_failed');
       })
       .finally(() => {
@@ -296,7 +327,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
 
     app.store
       .createRecord<Story>('stories')
-      .save(data as any)
+      .save(data)
       .then((story) => {
         if (this.alsoMoments && this.file && this.audience === 'everyone') this.crossPost(this.file);
         this.hide();
@@ -312,9 +343,15 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
     body.append('file', file);
     body.append('purpose', 'media');
     app
-      .request<any>({ method: 'POST', url: `${api}/moments-media`, serialize: (raw: FormData) => raw, body, errorHandler: () => {} })
+      .request<{ data?: { id?: number } }>({
+        method: 'POST',
+        url: `${api}/moments-media`,
+        serialize: (raw: FormData) => raw,
+        body,
+        errorHandler: () => {},
+      })
       .then((uploaded) => {
-        const id = uploaded?.id ?? uploaded?.media?.id ?? uploaded?.data?.id;
+        const id = uploaded?.data?.id;
         return app.request({
           method: 'POST',
           url: `${api}/moments`,

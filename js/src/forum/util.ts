@@ -9,7 +9,7 @@ export const t = (key: string, params: Record<string, unknown> = {}) => app.tran
 export const tx = (key: string, params: Record<string, unknown> = {}): string =>
   app.translator.trans(`${EXT}.forum.${key}`, params, true) as unknown as string;
 
-export const has = (extension: string): boolean => extension in ((globalThis as any).flarum?.extensions || {});
+export { has } from '../common/runtime';
 
 /** A request that didn't come back: say so, in words, instead of failing silently. */
 export function failed(): void {

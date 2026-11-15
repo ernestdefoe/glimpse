@@ -24,16 +24,16 @@ export async function sendReply(story: Story, text: string): Promise<void> {
   const content = `${tx('viewer.reply_prefix')} ${url}\n\n${text}`;
 
   if (channel === 'messages') {
-    await app.store.createRecord('dialog-messages').save({ content, users: [{ id: author.id() }] } as any);
+    await app.store.createRecord('dialog-messages').save({ content, users: [{ id: author.id() }] });
     return;
   }
 
   // Parley has no JSON:API type for this, only its own endpoints: open the conversation, then send.
-  const opened: any = await app.request({
+  const opened = await app.request<{ conversation?: { id?: number } }>({
     method: 'POST',
     url: `${app.forum.attribute('apiUrl')}/parley/conversations`,
     body: { userId: author.id() },
   });
-  const id = opened?.conversation?.id ?? opened?.id;
+  const id = opened?.conversation?.id;
   await app.request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/parley/conversations/${id}/messages`, body: { body: content } });
 }

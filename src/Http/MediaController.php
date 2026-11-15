@@ -31,19 +31,7 @@ class MediaController implements RequestHandlerInterface
 
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $actor = RequestUtil::getActor($request);
-        $parameters = $request->getAttribute('routeParameters');
-        $id = Ids::one(is_array($parameters) ? ($parameters['id'] ?? null) : null);
-
-        $media = StoryMedia::query()->find($id);
-        if ($media === null) {
-            throw new RouteNotFoundException();
-        }
-
-        $own = ! $actor->isGuest() && $media->user_id === $actor->id;
-        if (! $own && ! Story::whereVisibleTo($actor)->where('glimpse_stories.media_id', $media->id)->exists()) {
-            throw new PermissionDeniedException();
-        }
+        $media = $this->mediaFor($request);
 
         $disk = $this->storage->disk();
         $source = $disk->readStream($media->path);
@@ -55,36 +43,61 @@ class MediaController implements RequestHandlerInterface
         [$start, $end] = $this->range($request->getHeaderLine('Range'), $size) ?? [0, $size - 1];
         $partial = $start > 0 || $end < $size - 1;
 
-        if ($partial) {
-            // Only the requested bytes, through a temporary stream (in memory up to 2 MB).
-            $this->skip($source, $start);
-            $body = new Stream('php://temp', 'w+b');
-            for ($left = $end - $start + 1; $left > 0 && ! feof($source);) {
-                $chunk = fread($source, min(65536, $left));
-                if ($chunk === false || $chunk === '') {
-                    break;
-                }
-                $body->write($chunk);
-                $left -= strlen($chunk);
-            }
-            fclose($source);
-            $body->rewind();
-        } else {
-            $body = new Stream($source);
-        }
-
         $headers = [
             'Content-Type' => $media->mime,
             'Content-Length' => (string) ($end - $start + 1),
             'Accept-Ranges' => 'bytes',
             'Cache-Control' => 'private, max-age=3600',
             'Content-Disposition' => 'inline',
+            // Never let a browser guess another type than the one the upload was sniffed and stored as.
+            'X-Content-Type-Options' => 'nosniff',
         ];
         if ($partial) {
             $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
         }
 
-        return new Response($body, $partial ? 206 : 200, $headers);
+        return new Response($partial ? $this->slice($source, $start, $end) : new Stream($source), $partial ? 206 : 200, $headers);
+    }
+
+    /** The upload in the route, if the actor uploaded it or may see a story that uses it. */
+    private function mediaFor(ServerRequestInterface $request): StoryMedia
+    {
+        $actor = RequestUtil::getActor($request);
+        $parameters = $request->getAttribute('routeParameters');
+        $media = StoryMedia::query()->find(Ids::one(is_array($parameters) ? ($parameters['id'] ?? null) : null));
+        if ($media === null) {
+            throw new RouteNotFoundException();
+        }
+
+        $own = ! $actor->isGuest() && $media->user_id === $actor->id;
+        if (! $own && ! Story::whereVisibleTo($actor)->where('glimpse_stories.media_id', $media->id)->exists()) {
+            throw new PermissionDeniedException();
+        }
+
+        return $media;
+    }
+
+    /**
+     * Bytes $start to $end of the file, through a temporary stream (in memory up to 2 MB).
+     *
+     * @param resource $source
+     */
+    private function slice($source, int $start, int $end): Stream
+    {
+        $this->skip($source, $start);
+        $body = new Stream('php://temp', 'w+b');
+        for ($left = $end - $start + 1; $left > 0 && ! feof($source);) {
+            $chunk = fread($source, min(65536, $left));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            $body->write($chunk);
+            $left -= strlen($chunk);
+        }
+        fclose($source);
+        $body->rewind();
+
+        return $body;
     }
 
     /** Moves a stream to $offset: a seek where the driver allows it, otherwise reading past the bytes. */

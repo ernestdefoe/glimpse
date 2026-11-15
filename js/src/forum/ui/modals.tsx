@@ -50,8 +50,8 @@ export class SeenByModal extends Modal<SeenByAttrs> {
   load(offset: number): void {
     this.busy = true;
     app.store
-      .find<StoryView[]>('story-views', { filter: { story: this.attrs.story.id() }, page: { offset, limit: PAGE, total: 0 } } as any)
-      .then((views: any) => {
+      .find<StoryView[]>('story-views', { filter: { story: this.attrs.story.id() }, page: { offset, limit: PAGE, total: 0 } })
+      .then((views) => {
         this.views = offset ? [...this.views, ...views] : [...views];
         this.more = !!views.payload?.links?.next;
       })
@@ -182,7 +182,7 @@ export class ReportModal extends FormModal<ReportAttrs> {
     this.loading = true;
     app.store
       .createRecord('story-reports')
-      .save({ reason: this.reason, detail: this.detail.trim() || null, relationships: { story: this.attrs.story } } as any)
+      .save({ reason: this.reason, detail: this.detail.trim() || null, relationships: { story: this.attrs.story } })
       .then(() => {
         this.hide();
         this.attrs.onreported();
@@ -203,9 +203,12 @@ export class HighlightPickerModal extends FormModal<HighlightPickerAttrs> {
   oninit(vnode: Mithril.Vnode<HighlightPickerAttrs, this>) {
     super.oninit(vnode);
     app.store
-      .find<StoryHighlight[]>('story-highlights', { filter: { user: app.session.user!.id() } } as any)
+      .find<StoryHighlight[]>('story-highlights', { filter: { user: app.session.user!.id() } })
       .then((highlights) => (this.highlights = [...(highlights as StoryHighlight[])]))
-      .catch(() => (this.highlights = []))
+      .catch(() => {
+        this.highlights = [];
+        failed();
+      })
       .finally(() => m.redraw());
   }
 
@@ -270,7 +273,8 @@ export class HighlightPickerModal extends FormModal<HighlightPickerAttrs> {
 
   addTo(highlight: StoryHighlight): void {
     this.loading = true;
-    highlight.save({ relationships: { stories: [...(highlight.stories() || []).filter(Boolean), this.attrs.story] } } as any).then(() => {
+    const stories = (highlight.stories() || []).filter((story): story is Story => !!story);
+    highlight.save({ relationships: { stories: [...stories, this.attrs.story] } }).then(() => {
       this.hide();
       this.attrs.onadded(highlight.title());
     }, this.loaded.bind(this));
@@ -283,7 +287,7 @@ export class HighlightPickerModal extends FormModal<HighlightPickerAttrs> {
     this.loading = true;
     app.store
       .createRecord('story-highlights')
-      .save({ title, relationships: { stories: [this.attrs.story] } } as any)
+      .save({ title, relationships: { stories: [this.attrs.story] } })
       .then(() => {
         this.hide();
         this.attrs.onadded(title);

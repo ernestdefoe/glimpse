@@ -510,11 +510,8 @@ html:not(#x-glimpse) .GlimpseViewer-link {
   cursor: pointer;
 }
 .GlimpseViewer-reactions {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 80px;
-  z-index: 6;
+  // In the footer's flow, above the reply bar: a long caption pushes it up instead of hiding under it.
+  margin: 0 0 12px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;

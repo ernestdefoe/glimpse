@@ -4,6 +4,6 @@
  * doesn't publish.
  */
 export { loadCore } from './core';
-export { openViewer } from './Viewer';
+export { openViewer } from './mount';
 export { openCreate } from './open';
 export { StoriesPage, QueuePage, userStoriesPage } from './pages';

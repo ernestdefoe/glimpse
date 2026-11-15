@@ -118,6 +118,7 @@ class VisibilityTest extends GlimpseTestCase
         $file = $this->get("/glimpse/media/$media", 4);
         $this->assertSame(200, $file->getStatusCode());
         $this->assertSame('image/webp', $file->getHeaderLine('Content-Type'));
+        $this->assertStringContainsString('nosniff', $file->getHeaderLine('X-Content-Type-Options'));
         $this->assertStringContainsString('private', $file->getHeaderLine('Cache-Control'));
 
         // Byte ranges, which Safari needs to play video.
