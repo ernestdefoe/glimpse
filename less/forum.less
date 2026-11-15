@@ -200,6 +200,11 @@ html:not(#x-glimpse) .GlimpseBar-all {
 
 body.GlimpseViewer-open {
   overflow: hidden;
+
+  // Bespoke's reading-progress line sits at the very top of every page, over the story's own bars.
+  #bespoke-progress {
+    display: none;
+  }
 }
 .GlimpseViewer {
   position: fixed;
@@ -244,6 +249,10 @@ body.GlimpseViewer-open {
   }
   &--loading {
     background: #1b1d22;
+
+    .LoadingIndicator {
+      color: #fff;
+    }
   }
 }
 .GlimpseViewer-preload {

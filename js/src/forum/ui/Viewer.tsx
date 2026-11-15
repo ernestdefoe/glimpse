@@ -2,6 +2,7 @@ import app from 'flarum/forum/app';
 import Component, { type ComponentAttrs } from 'flarum/common/Component';
 import Avatar from 'flarum/common/components/Avatar';
 import Link from 'flarum/common/components/Link';
+import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import classList from 'flarum/common/utils/classList';
 import humanTime from 'flarum/common/helpers/humanTime';
 import type User from 'flarum/common/models/User';
@@ -9,7 +10,7 @@ import type { ApiPayloadSingle } from 'flarum/common/Store';
 import type Mithril from 'mithril';
 import type Story from '../models/Story';
 import { failed, t, tx } from '../util';
-import Gestures from './gestures';
+import Gestures, { keys } from './gestures';
 import caption from './caption';
 import ReplyBar from './ReplyBar';
 import ViewerMenu from './ViewerMenu';
@@ -282,26 +283,16 @@ export default class Viewer extends Component<ViewerAttrs> {
   // ---------- input ----------
 
   private onkey(e: KeyboardEvent): void {
-    // Typing a reply, or a modal on top: the keys are theirs.
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('input, textarea, .ModalManager')) return;
-
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      this.next();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      this.previous();
-    } else if (e.key === ' ') {
-      e.preventDefault();
-      this.setPaused(!this.paused);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      if (this.menuOpen) {
+    keys(e, {
+      forward: () => this.next(),
+      back: () => this.previous(),
+      pause: () => this.setPaused(!this.paused),
+      escape: () => {
+        if (!this.menuOpen) return this.attrs.close();
         this.menuOpen = false;
         this.setPaused(false);
-      } else this.attrs.close();
-    }
+      },
+    });
   }
 
   private say(message: string): void {
@@ -380,14 +371,14 @@ export default class Viewer extends Component<ViewerAttrs> {
         onpointercancel={() => this.gestures.cancel()}
         oncontextmenu={(e: Event) => e.preventDefault()}
       >
-        {story ? this.media(story) : <div className="GlimpseViewer-media GlimpseViewer-media--loading" />}
-        <ol className="GlimpseViewer-progress" aria-hidden="true">
-          {this.stories.map((_, i) => (
-            <li className={classList(i < this.index && 'is-done', i === this.index && 'is-current')}>
-              <b />
-            </li>
-          ))}
-        </ol>
+        {story && !this.loading ? (
+          this.media(story)
+        ) : (
+          <div className="GlimpseViewer-media GlimpseViewer-media--loading">
+            <LoadingIndicator />
+          </div>
+        )}
+        {this.progressBars()}
         {story && user ? this.header(story, user, own) : null}
         {this.menuOpen && story ? (
           <ViewerMenu
@@ -411,6 +402,18 @@ export default class Viewer extends Component<ViewerAttrs> {
         {story ? this.footer(story, user, own) : null}
         {this.nextPreload()}
       </div>
+    );
+  }
+
+  private progressBars(): Mithril.Children {
+    return (
+      <ol className="GlimpseViewer-progress" aria-hidden="true">
+        {this.stories.map((_, i) => (
+          <li className={classList(i < this.index && 'is-done', i === this.index && 'is-current')}>
+            <b />
+          </li>
+        ))}
+      </ol>
     );
   }
 

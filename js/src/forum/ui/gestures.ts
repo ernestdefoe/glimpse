@@ -92,3 +92,12 @@ export default class Gestures {
     if (card) card.style.transform = dy ? `translateY(${dy}px) scale(${1 - dy / 1500})` : '';
   }
 }
+
+/** The viewer's keys: ← → to move, Space to pause, Esc to close. Typing in a field or a modal keeps its keys. */
+export function keys(e: KeyboardEvent, on: { forward(): void; back(): void; pause(): void; escape(): void }): void {
+  if ((e.target as HTMLElement | null)?.closest('input, textarea, .ModalManager')) return;
+  const action = { ArrowRight: on.forward, ArrowLeft: on.back, ' ': on.pause, Escape: on.escape }[e.key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+}
