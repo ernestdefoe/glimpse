@@ -100,6 +100,7 @@ class HighlightResource extends AbstractDatabaseResource
                 ->maxLength(40),
             Schema\Integer::make('position')
                 ->writableOnUpdate()
+                // Replacing is intended: no earlier rule (not nullable), so these three are the whole set.
                 ->rules(['integer', 'min:0', 'max:1000'], true),
             Schema\Relationship\ToOne::make('user')
                 ->type('users')
