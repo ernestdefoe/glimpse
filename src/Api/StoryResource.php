@@ -137,17 +137,19 @@ class StoryResource extends AbstractDatabaseResource
             Schema\Integer::make('background')
                 ->nullable()
                 ->writableOnCreate()
-                ->rules(['integer', 'min:0', 'max:7'], true),
+                ->rules(['integer', 'min:0', 'max:7'], true, false),
             Schema\Str::make('caption')
                 ->nullable()
                 ->writableOnCreate()
                 ->maxLength(200)
                 ->set(fn (Story $story, ?string $value) => $story->caption = $this->clean($value)),
+            // rules(…, override: false): the default override would drop nullable() and maxLength() above it,
+            // and an empty link (null or "") must mean no link.
             Schema\Str::make('linkUrl')
                 ->nullable()
                 ->writableOnCreate()
                 ->maxLength(2000)
-                ->rules(['url:http,https'], true)
+                ->rules(['url:http,https'], true, false)
                 ->set(fn (Story $story, ?string $value) => $story->link_url = $this->clean($value)),
             Schema\Str::make('audience')
                 ->writableOnCreate()

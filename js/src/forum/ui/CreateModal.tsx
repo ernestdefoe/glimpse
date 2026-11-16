@@ -315,9 +315,10 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
     const data: Record<string, unknown> = {
       kind: this.kind,
       caption: this.caption.trim() || null,
-      linkUrl: this.link.trim() || null,
       audience: this.audience,
     };
+    const link = this.link.trim();
+    if (link) data.linkUrl = link;
     if (this.kind === 'text') {
       data.text = this.text.trim();
       data.background = this.background;

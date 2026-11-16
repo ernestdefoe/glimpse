@@ -39,6 +39,8 @@ class CreateTest extends GlimpseTestCase
             ['kind' => 'text', 'text' => 'Hi', 'caption' => str_repeat('b', 201)],
             ['kind' => 'text', 'text' => 'Hi', 'linkUrl' => 'javascript:alert(1)'],
             ['kind' => 'text', 'text' => 'Hi', 'linkUrl' => 'ftp://example.com'],
+            ['kind' => 'text', 'text' => 'Hi', 'linkUrl' => 'not a link'],
+            ['kind' => 'text', 'text' => 'Hi', 'linkUrl' => 'https://example.com/'.str_repeat('a', 2000)],
             ['kind' => 'text', 'text' => 'Hi', 'audience' => 'friends'],
             ['kind' => 'text', 'text' => '   '],
             ['kind' => 'photo'],
@@ -48,6 +50,31 @@ class CreateTest extends GlimpseTestCase
             $this->assertArrayHasKey('source', $this->json($response)['errors'][0]);
         }
         $this->assertSame(0, Story::query()->count());
+    }
+
+    #[Test]
+    public function the_link_is_optional_whether_left_out_null_or_empty(): void
+    {
+        foreach ([
+            'left out' => [[], null],
+            'null' => [['linkUrl' => null], null],
+            'empty' => [['linkUrl' => ''], null],
+            'blank' => [['linkUrl' => '   '], null],
+            'a link' => [['linkUrl' => 'https://example.com/trail'], 'https://example.com/trail'],
+        ] as $case => [$link, $stored]) {
+            foreach (['text', 'photo'] as $kind) {
+                $attributes = ['kind' => $kind, 'background' => null, ...$link];
+                if ($kind === 'text') {
+                    $attributes['text'] = 'Hi';
+                }
+                $response = $this->post(2, $attributes, $kind === 'photo' ? $this->uploadId(2) : null);
+                $this->assertSame(201, $response->getStatusCode(), "$kind, link $case: ".$response->getBody());
+
+                $id = (int) $this->json($response)['data']['id'];
+                $this->assertSame($stored, $this->json($response)['data']['attributes']['linkUrl'], "$kind, link $case");
+                $this->assertSame($stored, Story::query()->findOrFail($id)->link_url, "$kind, link $case");
+            }
+        }
     }
 
     #[Test]
