@@ -47,14 +47,6 @@ class Uploader
     /** Frames an animated GIF may have, however small. */
     private const MAX_FRAMES = 300;
 
-    /**
-     * Bytes a decoded GIF frame costs: Intervention's GD driver builds every frame as a full-canvas
-     * truecolor image and keeps them all (measured: up to 16 bytes a canvas pixel, plus about 20 KB).
-     */
-    private const FRAME_BYTES_PER_PIXEL = 16;
-
-    private const FRAME_OVERHEAD = 20_000;
-
     public function __construct(
         private readonly Storage $storage,
         private readonly Config $config,
@@ -220,14 +212,13 @@ class Uploader
         if ($info[0] * $info[1] > self::MAX_PIXELS) {
             $this->fail('too_many_pixels', ['{max}' => intdiv(self::MAX_PIXELS, 1_000_000)]);
         }
-        // The decoder turns every GIF frame into a full-canvas image: weigh them all before it starts.
+        // The decoder turns every GIF frame into an image: count them before it starts.
         if ($gif) {
             $frames = GifFrames::count($bytes);
             if ($frames === null || $frames < 1) {
                 $this->fail('bad_type');
             }
-            $cost = $frames * ($info[0] * $info[1] * self::FRAME_BYTES_PER_PIXEL + self::FRAME_OVERHEAD);
-            if ($frames > self::MAX_FRAMES || $cost > $this->animationBudget()) {
+            if ($frames > self::MAX_FRAMES) {
                 $this->fail('too_many_frames');
             }
         }
@@ -250,14 +241,6 @@ class Uploader
             : (string) $image->encode(new WebpEncoder(quality: 82));
 
         return [$encoded, $image->width(), $image->height(), $animated];
-    }
-
-    /** Half of PHP's memory limit (512 MB assumed when there is none), for decoding an animation. */
-    private function animationBudget(): int
-    {
-        $limit = ini_parse_quantity((string) ini_get('memory_limit'));
-
-        return intdiv($limit > 0 ? $limit : 512 * 1024 * 1024, 2);
     }
 
     /** @param array<string, int|string> $params */

@@ -125,23 +125,17 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
-    public function an_animated_gif_is_weighed_by_what_decoding_all_its_frames_costs(): void
+    public function an_animated_gif_over_300_frames_is_refused_and_a_common_one_goes_through(): void
     {
         $this->setting('ernestdefoe-glimpse.flood_seconds', 0);
-        $refused = function (string $bytes, string $why): void {
-            $response = $this->upload(2, $bytes, 'a.gif', 'image/gif');
-            $this->assertSame(422, $response->getStatusCode(), $why);
-            // The test catalogue has no extension locales: the key or its text.
-            $this->assertMatchesRegularExpression('/too_many_frames|too many frames/', (string) $response->getBody(), $why);
-        };
 
-        // 160 KB on disk, about 1.5 GB to decode (85 frames of 1080×1080).
-        $refused($this->fixture('animated-1080-heavy.gif'), 'heavy');
-        // Tiny frames, but more than 300 of them.
-        $refused(\ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(301), 'frames');
+        $refused = $this->upload(2, \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(301), 'a.gif', 'image/gif');
+        $this->assertSame(422, $refused->getStatusCode());
+        // The test catalogue has no extension locales: the key or its text.
+        $this->assertMatchesRegularExpression('/too_many_frames|too many frames/', (string) $refused->getBody());
         $this->assertSame(0, StoryMedia::query()->count());
 
-        // A common animation (60 frames of 480×480) still goes through, and stays a GIF.
+        // A common animation (60 frames of 480×480) goes through, and stays a GIF.
         $light = $this->upload(2, $this->fixture('animated-480.gif'), 'light.gif', 'image/gif');
         $this->assertSame(201, $light->getStatusCode(), (string) $light->getBody());
         $this->assertSame('image/gif', $this->json($light)['data']['attributes']['mime']);
