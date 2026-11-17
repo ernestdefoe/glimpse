@@ -21,9 +21,9 @@ export function registerWidgets(): void {
   for (const register of [registerFof, registerBespoke, registerPageBuilder]) {
     try {
       register();
-    } catch (e) {
-      // A host whose internals moved must not take the forum down with it.
-      console.warn('[glimpse] widget host registration failed', e);
+    } catch {
+      // Deliberately silent: a widget host whose internals moved must not take the forum down with it,
+      // and the bar still shows in its own place on the discussion list.
     }
   }
 }

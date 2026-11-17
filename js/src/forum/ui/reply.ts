@@ -35,5 +35,6 @@ export async function sendReply(story: Story, text: string): Promise<void> {
     body: { userId: author.id() },
   });
   const id = opened?.conversation?.id;
+  if (typeof id !== 'number') throw new Error('Parley did not open a conversation.');
   await app.request({ method: 'POST', url: `${app.forum.attribute('apiUrl')}/parley/conversations/${id}/messages`, body: { body: content } });
 }

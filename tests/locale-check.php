@@ -61,7 +61,7 @@ foreach ($sources as $dir => $source) {
     }
 }
 // Admin option groups built from lists: options([...], 'placement') etc.
-$admin = (string) file_get_contents("$root/js/src/admin/index.ts");
+$admin = (string) file_get_contents("$root/js/src/admin/extend.ts");
 preg_match_all("/options\((.*?),\s*'([a-z_]+)'\)/", $admin, $groups, PREG_SET_ORDER);
 foreach ($groups as [, $lists, $group]) {
     // Only the literals inside [...] lists; installed('…') ids are not option keys.
