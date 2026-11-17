@@ -46,8 +46,19 @@ class WebmScrubber
         }
 
         $segmentEnd = $segment['size'] === null ? $end : min($end, $segment['dataStart'] + $segment['size']);
+
+        return $this->segment($file, $segment['dataStart'], $segmentEnd);
+    }
+
+    /**
+     * Walks the Segment's children: voids Tags and Attachments, reads Info.
+     *
+     * @return array{durationMs: int|null}|null
+     */
+    private function segment(StreamBytes $file, int $start, int $segmentEnd): ?array
+    {
         $durationMs = null;
-        $pos = $segment['dataStart'];
+        $pos = $start;
 
         while ($pos < $segmentEnd) {
             $child = $this->element($file, $pos, $segmentEnd);
