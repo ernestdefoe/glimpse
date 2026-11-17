@@ -16,6 +16,7 @@ use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
@@ -60,7 +61,7 @@ class StoryReportResource extends AbstractDatabaseResource
                 ->authenticated()
                 ->can('glimpse.moderate')
                 ->defaultInclude(['story', 'story.user', 'user'])
-                ->eagerLoad(['story.media'])
+                ->eagerLoad(['user.groups', 'story.user.groups'])
                 ->defaultSort('-createdAt')
                 ->paginate(20, 50),
             Endpoint\Create::make()
@@ -116,9 +117,11 @@ class StoryReportResource extends AbstractDatabaseResource
     public function creating(object $model, BaseContext $context): ?object
     {
         $actor = $context->getActor();
-        $story = Story::query()->find($model->story_id);
+        // The story relationship is already resolved through the visibility scope; asking again here keeps
+        // that true on its own, and a story gone since answers like one that never existed (no probing).
+        $story = Story::whereVisibleTo($actor)->find($model->story_id);
         if ($story === null) {
-            throw new ValidationException(['story' => $this->translator->trans('ernestdefoe-glimpse.api.story_gone')]);
+            throw new ModelNotFoundException();
         }
         $actor->assertCan('report', $story);
 

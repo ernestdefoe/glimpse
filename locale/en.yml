@@ -73,7 +73,6 @@ ernestdefoe-glimpse:
     followers_off: Followers-only stories aren't available on this forum.
     daily_limit: You can post up to {count} stories a day.
     bad_reaction: That reaction isn't available.
-    story_gone: That story is no longer available.
     already_reported: You already reported this story.
     cannot_mute: You can't mute this person.
     highlights_full: You can have up to {count} highlights.

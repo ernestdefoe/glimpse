@@ -93,14 +93,37 @@ class CollectionsTest extends GlimpseTestCase
     }
 
     #[Test]
-    public function you_cannot_report_what_you_cannot_see(): void
+    public function a_story_you_cannot_see_is_reported_as_missing_exactly_like_one_that_never_existed(): void
     {
-        $id = $this->insert(2, ['status' => 'hidden']);
-        $response = $this->send($this->request('POST', '/api/glimpse-reports', ['authenticatedAs' => 4, 'json' => ['data' => [
+        $report = fn (int $id): \Psr\Http\Message\ResponseInterface => $this->send($this->request('POST', '/api/glimpse-reports', ['authenticatedAs' => 4, 'json' => ['data' => [
             'type' => 'glimpse-reports',
             'attributes' => ['reason' => 'spam'],
             'relationships' => ['story' => ['data' => ['type' => 'glimpse-stories', 'id' => (string) $id]]],
         ]]]));
-        $this->assertSame(404, $response->getStatusCode());
+
+        // The error names the id the client sent, so compare with that id taken out.
+        $body = fn (\Psr\Http\Message\ResponseInterface $response, int $id): string => str_replace("glimpse-stories.$id]", 'glimpse-stories.?]', (string) $response->getBody());
+        $missing = $report(999999);
+        $this->assertSame(404, $missing->getStatusCode());
+        $expected = $body($missing, 999999);
+
+        $hidden = [
+            'hidden' => $this->insert(2, ['status' => 'hidden']),
+            'pending' => $this->insert(2, ['status' => 'pending', 'approved_at' => null]),
+            'followers only' => $this->insert(2, ['audience' => 'followers']),
+            'expired' => $this->insert(2, ['expires_at' => \Carbon\Carbon::now()->subMinute()]),
+        ];
+        foreach ($hidden as $what => $id) {
+            $response = $report($id);
+            $this->assertSame(404, $response->getStatusCode(), $what);
+            $this->assertSame($expected, $body($response, $id), "A $what story answers exactly like a missing one");
+            $this->assertSame(0, $this->database()->table('glimpse_reports')->where('story_id', $id)->count(), $what);
+        }
+
+        // Reported first by someone else, still invisible to this member: still missing, never "already reported".
+        $this->database()->table('glimpse_reports')->insert(['story_id' => $hidden['hidden'], 'user_id' => 3, 'reason' => 'spam', 'created_at' => \Carbon\Carbon::now()]);
+        $this->assertSame($expected, $body($report($hidden['hidden']), $hidden['hidden']));
+
+        $this->assertSame(201, $report($this->text(2, ['audience' => 'members']))->getStatusCode(), 'A story they can see still works.');
     }
 }
