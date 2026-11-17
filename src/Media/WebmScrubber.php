@@ -72,6 +72,9 @@ class WebmScrubber
                 $this->void($file, $pos, $childEnd - $pos);
             } elseif ($child['id'] === self::INFO) {
                 $durationMs = $this->duration($file, $child['dataStart'], $childEnd);
+                if ($durationMs === false) {
+                    return null;
+                }
             }
 
             $pos = $childEnd;
@@ -80,8 +83,12 @@ class WebmScrubber
         return ['durationMs' => $durationMs];
     }
 
-    /** Reads the duration from Info, and voids its Title on the way. */
-    private function duration(StreamBytes $file, int $start, int $end): ?int
+    /**
+     * Reads the duration from Info, and voids its Title on the way. False when an element inside Info
+     * is malformed or claims to run past it: such a file is refused, so a Title can't hide behind it
+     * and a crafted size can't make the void write past the element.
+     */
+    private function duration(StreamBytes $file, int $start, int $end): int|false|null
     {
         $scale = 1_000_000;
         $duration = null;
@@ -89,8 +96,8 @@ class WebmScrubber
 
         while ($pos < $end) {
             $el = $this->element($file, $pos, $end);
-            if ($el === null || $el['size'] === null) {
-                break;
+            if ($el === null || $el['size'] === null || $el['dataStart'] + $el['size'] > $end) {
+                return false;
             }
             if ($el['id'] === self::TIMECODE_SCALE && $el['size'] >= 1 && $el['size'] <= 8) {
                 $scale = (int) hexdec(bin2hex($file->read($el['dataStart'], $el['size'])));

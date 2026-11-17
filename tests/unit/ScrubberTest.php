@@ -30,6 +30,20 @@ class ScrubberTest extends TestCase
     }
 
     #[Test]
+    public function a_webm_title_claiming_to_run_past_its_info_is_refused_and_nothing_is_written(): void
+    {
+        // A Title that says it holds 1 MB, inside a 33-byte file: voiding it by its own size would
+        // write a megabyte of zeros (or, with a bigger claim, gigabytes) and grow the upload.
+        $title = "\x7B\xA9"."\x10\x10\x00\x00".'x';
+        $info = "\x15\x49\xA9\x66".chr(0x80 | strlen($title)).$title;
+        $bytes = "\x1A\x45\xDF\xA3\x87\x42\x82\x84webm"."\x18\x53\x80\x67".chr(0x80 | strlen($info)).$info;
+
+        [$clean, $after] = $this->scrub(new WebmScrubber(), $bytes);
+        $this->assertNull($clean);
+        $this->assertSame($bytes, $after);
+    }
+
+    #[Test]
     public function every_fixture_scrubs_to_exactly_the_bytes_it_did_before_streams(): void
     {
         // SHA-256 of each fixture's scrubbed bytes from 1.0.5, which scrubbed a native file handle.

@@ -41,9 +41,17 @@ final class StreamBytes
         return $bytes;
     }
 
-    /** Writes $head at $pos, then zeros up to $length bytes in all, in small pieces. */
+    /**
+     * Writes $head at $pos, then zeros up to $length bytes in all, in small pieces. Never past the end:
+     * scrubbing replaces bytes, it never grows the stream.
+     */
     public function overwrite(int $pos, string $head, int $length): void
     {
+        $length = min($length, $this->size() - $pos);
+        if ($pos < 0 || $length < 1) {
+            return;
+        }
+        $head = substr($head, 0, $length);
         $this->stream->seek($pos);
         $this->stream->write($head);
         for ($left = $length - strlen($head); $left > 0; $left -= 65536) {
