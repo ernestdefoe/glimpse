@@ -90,4 +90,44 @@ class BarTest extends GlimpseTestCase
         $story = array_values(array_filter($included, fn (array $row): bool => $row['type'] === 'glimpse-stories'))[0];
         $this->assertTrue($story['attributes']['isSeen']);
     }
+
+    #[Test]
+    public function the_thirty_newest_posters_are_picked_by_time_not_by_user_or_story_id(): void
+    {
+        // 32 posters whose user ids, story ids and post times all disagree. The two OLDEST posts belong
+        // to users 25 and 26, in the middle of the id range, and are inserted last, so they get the
+        // highest story ids. Ordering by user id (either way), by story id or not at all keeps them.
+        $users = [];
+        for ($id = 10; $id < 42; $id++) {
+            $users[] = ['id' => $id, 'username' => "poster$id", 'email' => "poster$id@machine.local", 'is_email_confirmed' => 1, 'password' => 'x'];
+        }
+        $this->database()->table('users')->insert($users);
+        $others = array_values(array_diff(range(10, 41), [25, 26]));
+        $minutesAgo = [];
+        foreach ($others as $n => $id) {
+            $minutesAgo[$id] = 1 + (($n * 7) % 30);
+        }
+        $minutesAgo[25] = 90;
+        $minutesAgo[26] = 95;
+        foreach ($minutesAgo as $id => $ago) {
+            $this->insert($id, ['created_at' => Carbon::now()->subMinutes($ago)]);
+        }
+
+        $authors = array_keys($this->barPage());
+        sort($authors);
+        $this->assertSame($others, $authors);
+    }
+
+    /** @return array<int, int> the bar's story id per author, for a page as large as the forum asks for */
+    private function barPage(): array
+    {
+        $response = $this->get('/api/glimpse-stories', 3, ['filter' => ['bar' => '1'], 'page' => ['limit' => 30, 'total' => 0]]);
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        $rows = [];
+        foreach ($this->json($response)['data'] as $row) {
+            $rows[(int) $row['relationships']['user']['data']['id']] = (int) $row['id'];
+        }
+
+        return $rows;
+    }
 }

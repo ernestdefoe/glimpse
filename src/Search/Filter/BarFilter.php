@@ -43,7 +43,9 @@ class BarFilter implements FilterInterface
             // story is the highest id (two stories in the same second still give one row).
             ->selectRaw('MAX(created_at) as glimpse_latest, MAX(id) as glimpse_newest')
             ->groupBy('glimpse_stories.user_id')
-            ->orderByDesc('glimpse_latest')
+            // The limit keeps the 30 newest posters, so this order matters. It names the expression, not
+            // its alias: ordering a grouped query by a select alias isn't standard SQL.
+            ->orderByRaw('MAX(created_at) DESC')
             ->limit(self::AUTHORS);
         LiveFilter::constrain($authors, $actor);
 
