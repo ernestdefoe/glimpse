@@ -20,7 +20,6 @@ use Flarum\Queue\AbstractJob;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Collection;
 
 /**
  * Tells people about a story that just went live, off the request:
@@ -32,8 +31,6 @@ use Illuminate\Support\Collection;
  */
 class SendStoryNotifications extends AbstractJob
 {
-    private const CHUNK = 200;
-
     public function __construct(private readonly int $storyId)
     {
         parent::__construct();
@@ -58,19 +55,16 @@ class SendStoryNotifications extends AbstractJob
             return;
         }
 
-        $followers = $this->followers($author, $mentioned, $config, $follows, $ignores);
-        $cap = $config->notifyCap();
-        $sent = 0;
-
-        $followers->orderBy('users.id')->chunk(self::CHUNK, function (Collection $users) use ($story, $author, $notifications, &$sent, $cap): bool {
-            $recipients = array_values($users->take($cap - $sent)->all());
-            if ($recipients !== []) {
-                $notifications->sync(new NewStoryBlueprint($story, $author), $recipients);
-                $sent += count($recipients);
-            }
-
-            return $sent < $cap;
-        });
+        // One sync for every recipient: core's syncer deletes this story's alerts for anyone not in the
+        // list it is given, so syncing batch by batch would take back each batch's alerts with the next.
+        $recipients = $this->followers($author, $mentioned, $config, $follows, $ignores)
+            ->orderBy('users.id')
+            ->limit($config->notifyCap())
+            ->get()
+            ->all();
+        if ($recipients !== []) {
+            $notifications->sync(new NewStoryBlueprint($story, $author), array_values($recipients));
+        }
     }
 
     /**
