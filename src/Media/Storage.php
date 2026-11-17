@@ -7,6 +7,7 @@ namespace ErnestDefoe\Glimpse\Media;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Psr\Http\Message\StreamInterface;
+use RuntimeException;
 
 /**
  * Glimpse's own disk (`ernestdefoe-glimpse`): storage/glimpse by default, outside the public folder,
@@ -33,7 +34,10 @@ class Storage
     public function put(string|StreamInterface $contents, string $extension): string
     {
         $path = date('Y/m').'/'.bin2hex(random_bytes(16)).'.'.$extension;
-        $this->disk()->put($path, $contents);
+        // A disk that couldn't write says so with false: stop here, before a row points at nothing.
+        if ($this->disk()->put($path, $contents) !== true) {
+            throw new RuntimeException("Glimpse could not write $path to its media disk.");
+        }
 
         return $path;
     }
