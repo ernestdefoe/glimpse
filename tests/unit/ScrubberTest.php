@@ -6,9 +6,9 @@ namespace ErnestDefoe\Glimpse\Tests\unit;
 
 use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Media\Mp4Scrubber;
-use ErnestDefoe\Glimpse\Media\SeekableFile;
 use ErnestDefoe\Glimpse\Media\Sniffer;
 use ErnestDefoe\Glimpse\Media\WebmScrubber;
+use Laminas\Diactoros\StreamFactory;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -22,13 +22,27 @@ class ScrubberTest extends TestCase
     /** @return array{0: array{durationMs: int|null}|null, 1: string} the result and the scrubbed bytes */
     private function scrub(Mp4Scrubber|WebmScrubber $scrubber, string $bytes): array
     {
-        $handle = fopen('php://temp', 'w+b');
-        $this->assertNotFalse($handle);
-        fwrite($handle, $bytes);
-        $result = $scrubber->scrub(new SeekableFile($handle));
-        rewind($handle);
+        $stream = (new StreamFactory())->createStream($bytes);
+        $result = $scrubber->scrub($stream);
+        $stream->rewind();
 
-        return [$result, (string) stream_get_contents($handle)];
+        return [$result, $stream->getContents()];
+    }
+
+    #[Test]
+    public function every_fixture_scrubs_to_exactly_the_bytes_it_did_before_streams(): void
+    {
+        // SHA-256 of each fixture's scrubbed bytes from 1.0.5, which scrubbed a native file handle.
+        $expected = [
+            'location.mp4' => [2000, 'fcac20f44576d5c5f066587cb042b6fe1abae1f7641a3b62eed9ec3c14d06e65'],
+            'long.mp4' => [30000, 'a18b1aa20c4c39a26d3f70a758b72c24efc6688798dd839b49c6268a01d0a91c'],
+            'tagged.webm' => [2000, 'a5f266451f1ba388ca57528f77ef978991b7c9937e4445f3465171ad9b4179b7'],
+        ];
+        foreach ($expected as $name => [$durationMs, $sha256]) {
+            [$clean, $bytes] = $this->scrub(str_ends_with($name, '.mp4') ? new Mp4Scrubber() : new WebmScrubber(), $this->fixture($name));
+            $this->assertSame(['durationMs' => $durationMs], $clean, $name);
+            $this->assertSame($sha256, hash('sha256', $bytes), $name);
+        }
     }
 
     #[Test]

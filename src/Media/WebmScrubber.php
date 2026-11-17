@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErnestDefoe\Glimpse\Media;
 
+use Psr\Http\Message\StreamInterface;
 /**
  * Removes the metadata of a WebM file (Tags, Attachments, and the Info element's Title) without
  * re-encoding it, and reads its duration from the Info element.
@@ -29,9 +30,10 @@ class WebmScrubber
     /** Tags and Attachments. */
     private const METADATA = [0x1254C367, 0x1941A469];
 
-    /** @return array{durationMs: int|null}|null null when the file isn't a readable WebM; the file is scrubbed in place */
-    public function scrub(SeekableFile $file): ?array
+    /** @return array{durationMs: int|null}|null null when the stream isn't a readable WebM; the stream is scrubbed in place */
+    public function scrub(StreamInterface $stream): ?array
     {
+        $file = new StreamBytes($stream);
         $end = $file->size();
         $header = $this->element($file, 0, $end);
         if ($header === null || $header['size'] === null) {
@@ -79,7 +81,7 @@ class WebmScrubber
     }
 
     /** Reads the duration from Info, and voids its Title on the way. */
-    private function duration(SeekableFile $file, int $start, int $end): ?int
+    private function duration(StreamBytes $file, int $start, int $end): ?int
     {
         $scale = 1_000_000;
         $duration = null;
@@ -107,7 +109,7 @@ class WebmScrubber
     /**
      * Replaces $length bytes at $pos with a Void element (id 0xEC) of exactly that length.
      */
-    private function void(SeekableFile $file, int $pos, int $length): void
+    private function void(StreamBytes $file, int $pos, int $length): void
     {
         if ($length < 2) {
             return;
@@ -125,7 +127,7 @@ class WebmScrubber
     }
 
     /** @return array{id: int, size: int|null, dataStart: int}|null size null = unknown */
-    private function element(SeekableFile $file, int $pos, int $end): ?array
+    private function element(StreamBytes $file, int $pos, int $end): ?array
     {
         $id = $this->vint($file->read($pos, min(8, $end - $pos)), true);
         if ($id === null) {

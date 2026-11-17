@@ -6,6 +6,7 @@ namespace ErnestDefoe\Glimpse\Media;
 
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * Glimpse's own disk (`ernestdefoe-glimpse`): storage/glimpse by default, outside the public folder,
@@ -28,8 +29,8 @@ class Storage
         return $this->filesystems->disk(self::DISK);
     }
 
-    /** @param string|resource $contents bytes, or an open file (written as a stream) */
-    public function put($contents, string $extension): string
+    /** @param string|StreamInterface $contents bytes, or a stream (written as one, never read into memory) */
+    public function put(string|StreamInterface $contents, string $extension): string
     {
         $path = date('Y/m').'/'.bin2hex(random_bytes(16)).'.'.$extension;
         $this->disk()->put($path, $contents);

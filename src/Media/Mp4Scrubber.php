@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErnestDefoe\Glimpse\Media;
 
+use Psr\Http\Message\StreamInterface;
 /**
  * Removes the metadata a phone writes into an MP4 or QuickTime file (the place it was filmed,
  * the device, the owner) without re-encoding it, and reads its duration.
@@ -20,9 +21,10 @@ class Mp4Scrubber
 
     private ?int $durationMs = null;
 
-    /** @return array{durationMs: int|null}|null null when the file isn't a readable MP4; the file is scrubbed in place */
-    public function scrub(SeekableFile $file): ?array
+    /** @return array{durationMs: int|null}|null null when the stream isn't a readable MP4; the stream is scrubbed in place */
+    public function scrub(StreamInterface $stream): ?array
     {
+        $file = new StreamBytes($stream);
         $this->durationMs = null;
 
         if (! $this->walk($file, 0, $file->size(), 0)) {
@@ -33,7 +35,7 @@ class Mp4Scrubber
     }
 
     /** Walks the boxes between $start and $end, scrubbing as it goes. False when a box is malformed. */
-    private function walk(SeekableFile $file, int $start, int $end, int $depth): bool
+    private function walk(StreamBytes $file, int $start, int $end, int $depth): bool
     {
         if ($depth > 8) {
             return false;
@@ -77,7 +79,7 @@ class Mp4Scrubber
         return true;
     }
 
-    private function readDuration(SeekableFile $file, int $start, int $end): void
+    private function readDuration(StreamBytes $file, int $start, int $end): void
     {
         $first = $file->read($start, 1);
         $version = $first === '' ? 0 : ord($first);

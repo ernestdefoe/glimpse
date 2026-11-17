@@ -14,6 +14,7 @@ use Intervention\Image\Encoders\GifEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
 use Intervention\Image\Exceptions\RuntimeException as ImageException;
 use Intervention\Image\ImageManager;
+use Laminas\Diactoros\StreamFactory;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
 
@@ -43,6 +44,7 @@ class Uploader
         private readonly TranslatorInterface $translator,
         private readonly Mp4Scrubber $mp4,
         private readonly WebmScrubber $webm,
+        private readonly StreamFactory $streams,
     ) {
     }
 
@@ -107,33 +109,29 @@ class Uploader
         $media->size = strlen($encoded);
     }
 
-    /** @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format */
+    /**
+     * Copied in pieces to a php://temp stream (in memory up to 2 MB, spilled to a temporary file past
+     * that), scrubbed there and streamed to storage, so a video is never held in memory.
+     *
+     * @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format
+     */
     private function storeVideo(StoryMedia $media, StreamInterface $upload, string $format): void
     {
-        // Copied to a temporary file in pieces and scrubbed there, so a video is never held in memory.
-        $handle = tmpfile();
-        if ($handle === false) {
-            $this->fail('upload_failed');
-        }
-        while (! $upload->eof()) {
-            fwrite($handle, $upload->read(1048576));
-        }
-
+        $scratch = $this->streams->createStream();
         try {
-            $this->storeScrubbed($media, $handle, $format);
+            while (! $upload->eof()) {
+                $scratch->write($upload->read(1048576));
+            }
+            $this->storeScrubbed($media, $scratch, $format);
         } finally {
-            fclose($handle);
+            $scratch->close();
         }
     }
 
-    /**
-     * @param resource $handle
-     * @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format
-     */
-    private function storeScrubbed(StoryMedia $media, $handle, string $format): void
+    /** @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format */
+    private function storeScrubbed(StoryMedia $media, StreamInterface $video, string $format): void
     {
-        $file = new SeekableFile($handle);
-        $clean = $format === 'mp4' ? $this->mp4->scrub($file) : $this->webm->scrub($file);
+        $clean = $format === 'mp4' ? $this->mp4->scrub($video) : $this->webm->scrub($video);
         // An MP4 always declares its length (moov/mvhd): one that doesn't isn't a video we can check.
         // A WebM straight from a browser's recorder declares none; it is still capped by size, and the
         // viewer never plays past the admin's limit.
@@ -146,9 +144,9 @@ class Uploader
 
         $media->mime = $format === 'mp4' ? 'video/mp4' : 'video/webm';
         $media->duration_ms = $clean['durationMs'];
-        $media->size = $file->size();
-        rewind($handle);
-        $media->path = $this->storage->put($handle, $format === 'mp4' ? 'mp4' : 'webm');
+        $media->size = (int) $video->getSize();
+        $video->rewind();
+        $media->path = $this->storage->put($video, $format === 'mp4' ? 'mp4' : 'webm');
     }
 
     /** @return array{0: string, 1: int, 2: int, 3: bool} the encoded bytes, width, height, and whether it stayed a GIF */

@@ -69,6 +69,8 @@ class MediaTest extends GlimpseTestCase
         $this->assertStringNotContainsString('40.7128', $stored);
         $this->assertStringNotContainsString('Secret title', $stored);
         $this->assertStringContainsString('mdat', $stored);
+        // Byte for byte what 1.0.5 stored (it scrubbed a native file handle; now a PSR-7 stream).
+        $this->assertSame('fcac20f44576d5c5f066587cb042b6fe1abae1f7641a3b62eed9ec3c14d06e65', hash('sha256', $stored));
     }
 
     #[Test]
@@ -92,6 +94,7 @@ class MediaTest extends GlimpseTestCase
 
         $this->assertSame(strlen($original), strlen($stored));
         $this->assertStringNotContainsString('Webm secret', $stored);
+        $this->assertSame('a5f266451f1ba388ca57528f77ef978991b7c9937e4445f3465171ad9b4179b7', hash('sha256', $stored));
         $this->assertSame(2000, $this->json($response)['data']['attributes']['durationMs']);
     }
 
