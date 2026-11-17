@@ -52,7 +52,12 @@ class GuestWriteTest extends GlimpseTestCase
     public function every_write_endpoint_refuses_a_guest(): void
     {
         $story = $this->text(2);
-        $highlight = $this->json($this->send($this->request('POST', '/api/glimpse-highlights', ['authenticatedAs' => 2, 'json' => ['data' => ['type' => 'glimpse-highlights', 'attributes' => ['title' => 'Mine']]]])))['data']['id'];
+        // Holding a story everyone may see, so a guest can see the highlight (an empty one is the owner's alone).
+        $highlight = $this->json($this->send($this->request('POST', '/api/glimpse-highlights', ['authenticatedAs' => 2, 'json' => ['data' => [
+            'type' => 'glimpse-highlights',
+            'attributes' => ['title' => 'Mine'],
+            'relationships' => ['stories' => ['data' => [['type' => 'glimpse-stories', 'id' => (string) $story]]]],
+        ]]])))['data']['id'];
         $this->database()->table('glimpse_mutes')->insert(['user_id' => 2, 'muted_user_id' => 4, 'created_at' => \Carbon\Carbon::now()]);
         $mute = $this->database()->table('glimpse_mutes')->value('id');
         $this->database()->table('glimpse_reports')->insert(['story_id' => $story, 'user_id' => 4, 'reason' => 'spam', 'created_at' => \Carbon\Carbon::now()]);
