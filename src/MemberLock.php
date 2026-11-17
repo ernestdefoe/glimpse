@@ -23,9 +23,11 @@ class MemberLock
     /**
      * @template T
      * @param callable(): T $work
+     * @param int $seconds how long the lock outlives a request that dies holding it (it's released as
+     *                     soon as the work ends); longer than the work can take
      * @return T
      */
-    public function run(string $name, int $userId, string $field, callable $work): mixed
+    public function run(string $name, int $userId, string $field, callable $work, int $seconds = 10): mixed
     {
         // Every cache store Flarum ships (file, array, redis) can lock; one that can't still checks the limit.
         $store = $this->cache->getStore();
@@ -33,7 +35,7 @@ class MemberLock
             return $work();
         }
 
-        $lock = $store->lock("ernestdefoe-glimpse.$name.$userId", 10);
+        $lock = $store->lock("ernestdefoe-glimpse.$name.$userId", $seconds);
         if ($lock->get() !== true) {
             throw new ValidationException([$field => $this->translator->trans('ernestdefoe-glimpse.api.busy')]);
         }

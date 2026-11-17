@@ -70,12 +70,13 @@ class Uploader
 
     public function upload(User $actor, UploadedFileInterface $file): StoryMedia
     {
-        // Under the member's lock, so uploads sent at once can't pass the cap together.
+        // Under the member's lock, so uploads sent at once can't pass the cap together. Two minutes:
+        // a large video takes a while to copy and scrub, and the lock must not lapse during it.
         return $this->locks->run('upload', $actor->id, 'file', function () use ($actor, $file): StoryMedia {
             $this->makeRoom($actor);
 
             return $this->store($actor, $file);
-        });
+        }, 120);
     }
 
     /**
