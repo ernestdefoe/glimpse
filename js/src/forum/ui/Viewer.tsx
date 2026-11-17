@@ -167,8 +167,8 @@ export default class Viewer extends Component<ViewerAttrs> {
     this.menuOpen = false;
     this.reacting = false;
     this.paused = false;
-    const slide = (Number(app.forum.attribute('glimpseSlideSeconds')) || 6) * 1000;
-    const max = (Number(app.forum.attribute('glimpseVideoMaxSeconds')) || 15) * 1000;
+    const slide = Number(app.forum.attribute('glimpseSlideSeconds')) * 1000;
+    const max = Number(app.forum.attribute('glimpseVideoMaxSeconds')) * 1000;
     this.duration = story.kind() === 'video' ? Math.min(story.durationMs() || max, max) : slide;
     this.markSeen(story);
     this.prefetch();
@@ -209,7 +209,7 @@ export default class Viewer extends Component<ViewerAttrs> {
     const video = this.video();
     if (!this.paused && !this.loading && this.story()) {
       if (video && video.duration && isFinite(video.duration)) {
-        this.duration = Math.min(video.duration * 1000, (Number(app.forum.attribute('glimpseVideoMaxSeconds')) || 15) * 1000);
+        this.duration = Math.min(video.duration * 1000, Number(app.forum.attribute('glimpseVideoMaxSeconds')) * 1000);
         this.elapsed = video.currentTime * 1000;
       } else if (!video) {
         this.elapsed += now - this.last;

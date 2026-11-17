@@ -91,7 +91,7 @@ export class StoriesPage extends Page {
         <header className="GlimpsePage-head">
           <div>
             <h1 className="GlimpsePage-title">{t('page.title')}</h1>
-            <p className="GlimpsePage-intro">{t('page.intro', { count: app.forum.attribute('glimpseLifetimeHours') || 24 })}</p>
+            <p className="GlimpsePage-intro">{t('page.intro', { count: app.forum.attribute('glimpseLifetimeHours') })}</p>
           </div>
           {app.forum.attribute('glimpseCanCreate') ? (
             <Button className="Button Button--primary" icon="fas fa-plus" onclick={() => openCreate()}>

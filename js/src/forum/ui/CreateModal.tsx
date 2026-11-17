@@ -35,7 +35,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
   oninit(vnode: Mithril.Vnode<IFormModalAttrs, this>) {
     super.oninit(vnode);
     this.kind = this.kinds()[0] || 'text';
-    this.audience = (app.forum.attribute<Audience>('glimpseDefaultAudience') || 'everyone') as Audience;
+    this.audience = app.forum.attribute<Audience>('glimpseDefaultAudience');
     if (this.audience === 'followers' && !app.forum.attribute('glimpseFollows')) this.audience = 'everyone';
   }
 
@@ -66,7 +66,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
           {this.momentsField()}
         </div>
         <div className="GlimpseCreate-foot">
-          <span className="GlimpseCreate-lifetime">{t('create.lifetime', { count: app.forum.attribute('glimpseLifetimeHours') || 24 })}</span>
+          <span className="GlimpseCreate-lifetime">{t('create.lifetime', { count: app.forum.attribute('glimpseLifetimeHours') })}</span>
           <Button type="submit" className="Button Button--primary" loading={this.loading} disabled={!this.ready()}>
             {t('create.share')}
           </Button>
@@ -234,7 +234,7 @@ export default class CreateModal extends FormModal<IFormModalAttrs> {
           <i className={classList('fas', video ? 'fa-film' : 'fa-image')} aria-hidden="true" />{' '}
           {this.file ? <strong>{this.file.name}</strong> : t(video ? 'create.pick_video' : 'create.pick_photo')}
           <small>
-            {video ? t('create.video_help', { mb, seconds: app.forum.attribute('glimpseVideoMaxSeconds') || 15 }) : t('create.photo_help', { mb })}
+            {video ? t('create.video_help', { mb, seconds: app.forum.attribute('glimpseVideoMaxSeconds') }) : t('create.photo_help', { mb })}
           </small>
         </label>
         {this.uploading ? <LoadingIndicator size="small" display="inline" /> : null}

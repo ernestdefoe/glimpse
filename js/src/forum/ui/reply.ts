@@ -8,7 +8,7 @@ import { has, tx } from '../util';
  * permissions, blocks and limits apply as if the member had written the message there.
  */
 export function replyChannel(): 'parley' | 'messages' | null {
-  const choice = app.forum.attribute<string>('glimpseReplyVia') || 'auto';
+  const choice = app.forum.attribute<string>('glimpseReplyVia');
   if (choice === 'off') return null;
   if ((choice === 'parley' || choice === 'auto') && has('ernestdefoe-parley')) return 'parley';
   if ((choice === 'messages' || choice === 'auto') && has('flarum-messages')) return 'messages';
