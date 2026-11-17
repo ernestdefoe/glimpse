@@ -1,5 +1,7 @@
 # Glimpse
 
+[![Floxum code review](https://floxum.com/extension/ernestdefoe/glimpse/badge/review)](https://floxum.com/extension/ernestdefoe/glimpse#code-review)
+
 Stories for Flarum 2, called Glimpses on your forum: short photo, video and text posts that disappear after a day, shown as a row of avatar rings above the discussion list and played full screen.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg) [![Latest Stable Version](https://img.shields.io/packagist/v/ernestdefoe/glimpse.svg)](https://packagist.org/packages/ernestdefoe/glimpse)
