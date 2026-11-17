@@ -31,7 +31,7 @@ class FollowingFilter implements FilterInterface
         $actor = $state->getActor();
 
         if ($actor->isGuest() || ! $this->follows->available()) {
-            $state->getQuery()->whereRaw('1 = 0');
+            $state->getQuery()->whereKey([]);
 
             return;
         }

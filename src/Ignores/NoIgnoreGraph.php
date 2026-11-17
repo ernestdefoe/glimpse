@@ -17,7 +17,7 @@ class NoIgnoreGraph implements IgnoreGraph
 
     public function ignoredBy(int $userId): Closure
     {
-        return fn (Builder $query) => $query->select('id')->from('users')->whereRaw('1 = 0');
+        return fn (Builder $query) => $query->select('id')->from('users')->whereIn('id', []);
     }
 
     public function ignoring(int $userId): Closure

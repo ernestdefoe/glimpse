@@ -30,7 +30,7 @@ class ReportedFilter implements FilterInterface
             return;
         }
 
-        $state->getQuery()->whereExists(fn (QueryBuilder $report) => $report->selectRaw('1')
+        $state->getQuery()->whereExists(fn (QueryBuilder $report) => $report->select('glimpse_reports.story_id')
             ->from('glimpse_reports')
             ->whereColumn('glimpse_reports.story_id', 'glimpse_stories.id'), 'and', $negate);
     }

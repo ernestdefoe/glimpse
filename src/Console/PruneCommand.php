@@ -71,7 +71,7 @@ class PruneCommand extends AbstractCommand
         return Story::query()
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', Carbon::now())
-            ->whereNotExists(fn (QueryBuilder $kept) => $kept->selectRaw('1')
+            ->whereNotExists(fn (QueryBuilder $kept) => $kept->select('glimpse_highlight_stories.story_id')
                 ->from('glimpse_highlight_stories')
                 ->whereColumn('glimpse_highlight_stories.story_id', 'glimpse_stories.id'));
     }
@@ -81,7 +81,7 @@ class PruneCommand extends AbstractCommand
     {
         return StoryMedia::query()
             ->where('created_at', '<', Carbon::now()->subDay())
-            ->whereNotExists(fn (QueryBuilder $used) => $used->selectRaw('1')
+            ->whereNotExists(fn (QueryBuilder $used) => $used->select('glimpse_stories.media_id')
                 ->from('glimpse_stories')
                 ->whereColumn('glimpse_stories.media_id', 'glimpse_media.id'));
     }

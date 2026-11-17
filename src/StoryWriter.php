@@ -51,7 +51,7 @@ class StoryWriter
                 ->where('id', $story->media_id)
                 ->where('user_id', $actor->id)
                 ->where('kind', $kind->mediaKind())
-                ->whereNotExists(fn (QueryBuilder $used) => $used->selectRaw('1')->from('glimpse_stories')->whereColumn('glimpse_stories.media_id', 'glimpse_media.id'))
+                ->whereNotExists(fn (QueryBuilder $used) => $used->select('glimpse_stories.media_id')->from('glimpse_stories')->whereColumn('glimpse_stories.media_id', 'glimpse_media.id'))
                 ->first();
             if ($media === null) {
                 $this->fail('media', 'media_missing');

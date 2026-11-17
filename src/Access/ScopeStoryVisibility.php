@@ -43,7 +43,7 @@ class ScopeStoryVisibility
             if ($actor->hasPermission('glimpse.view')) {
                 $q->where(fn (Builder $public) => $this->publicly($public, $actor));
             } else {
-                $q->whereRaw('1 = 0');
+                $q->whereKey([]);
             }
 
             if (! $actor->isGuest()) {
@@ -60,7 +60,7 @@ class ScopeStoryVisibility
         $query->where('glimpse_stories.status', Status::Live->value)
             ->where(function (Builder $q) use ($now): void {
                 $q->where('glimpse_stories.expires_at', '>', $now)
-                    ->orWhereExists(fn (QueryBuilder $kept) => $kept->selectRaw('1')
+                    ->orWhereExists(fn (QueryBuilder $kept) => $kept->select('glimpse_highlight_stories.story_id')
                         ->from('glimpse_highlight_stories')
                         ->whereColumn('glimpse_highlight_stories.story_id', 'glimpse_stories.id'));
             })

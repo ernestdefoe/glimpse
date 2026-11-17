@@ -41,7 +41,7 @@ class Flags
         ]);
 
         if ($this->follows->available()) {
-            $query->addSelect(['glimpse_followed' => fn (QueryBuilder $follow) => $follow->selectRaw('1')
+            $query->addSelect(['glimpse_followed' => fn (QueryBuilder $follow) => $follow->select('glimpse_follows.followed_user_id')
                 ->fromSub($this->follows->followedBy($actor->id), 'glimpse_follows')
                 ->whereColumn('glimpse_follows.followed_user_id', 'glimpse_stories.user_id')
                 ->limit(1)]);

@@ -60,7 +60,7 @@ class HighlightResource extends AbstractDatabaseResource
     public function scope(Builder $query, BaseContext $context): void
     {
         if (! $context->getActor()->hasPermission('glimpse.view')) {
-            $query->whereRaw('1 = 0');
+            $query->whereKey([]);
         }
     }
 

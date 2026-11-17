@@ -63,7 +63,7 @@ class UnseenAuthors
             ->whereIn('glimpse_stories.user_id', $authorIds)
             ->where('glimpse_stories.status', Status::Live->value)
             ->where('glimpse_stories.expires_at', '>', Carbon::now())
-            ->whereNotExists(fn (QueryBuilder $view) => $view->selectRaw('1')
+            ->whereNotExists(fn (QueryBuilder $view) => $view->select('glimpse_views.story_id')
                 ->from('glimpse_views')
                 ->whereColumn('glimpse_views.story_id', 'glimpse_stories.id')
                 ->where('glimpse_views.user_id', $actor->id))
