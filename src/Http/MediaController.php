@@ -20,7 +20,8 @@ use Psr\Http\Server\RequestHandlerInterface;
 /**
  * `GET /glimpse/media/{id}`: a story's photo or video, only for someone who may see a story using it
  * (the visibility rule), or who uploaded it (the preview before posting). Never cached by shared
- * caches, so hiding or deleting a story takes its file away at once. Supports byte ranges, which
+ * caches, so hiding or deleting a story takes its file away from everyone who hasn't loaded it (a
+ * browser that already has it may keep its private copy for up to an hour). Supports byte ranges, which
  * Safari needs to play video.
  */
 class MediaController implements RequestHandlerInterface

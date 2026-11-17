@@ -104,7 +104,7 @@ class StoryReportResource extends AbstractDatabaseResource
         ];
     }
 
-    /** A second report racing the first one hits the unique key: the same answer as the check above. */
+    /** A second report racing the first one hits the unique key: the same answer as the check in creating() below. */
     protected function saveModel(Model $model, BaseContext $context): void
     {
         try {

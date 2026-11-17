@@ -166,13 +166,13 @@ class StoryWriter
         $story->mentionedUsers()->sync($ids);
     }
 
-    /** @param array<string, int|string> $params */
     /** A second story claimed the same upload at the same moment (the unique key caught it): the same answer as the check. */
     public function mediaTaken(): never
     {
         $this->fail('media', 'media_missing');
     }
 
+    /** @param array<string, int|string> $params */
     private function fail(string $field, string $key, array $params = []): never
     {
         throw new ValidationException([$field => $this->translator->trans('ernestdefoe-glimpse.api.'.$key, $params)]);
