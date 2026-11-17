@@ -110,17 +110,24 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
-    public function an_animated_gif_is_weighed_by_all_its_frames_before_it_is_decoded(): void
+    public function an_animated_gif_is_weighed_by_what_decoding_all_its_frames_costs(): void
     {
-        // 26 frames on a 2000×2000 canvas: 104 million pixels to decode, over the 100 million budget.
-        $heavy = $this->upload(2, \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(26, 2000, 2000), 'heavy.gif', 'image/gif');
-        $this->assertSame(422, $heavy->getStatusCode());
-        // The test catalogue has no extension locales: the key or its text.
-        $this->assertMatchesRegularExpression('/too_many_frames|too many frames/', (string) $heavy->getBody());
+        $this->setting('ernestdefoe-glimpse.flood_seconds', 0);
+        $refused = function (string $bytes, string $why): void {
+            $response = $this->upload(2, $bytes, 'a.gif', 'image/gif');
+            $this->assertSame(422, $response->getStatusCode(), $why);
+            // The test catalogue has no extension locales: the key or its text.
+            $this->assertMatchesRegularExpression('/too_many_frames|too many frames/', (string) $response->getBody(), $why);
+        };
+
+        // 160 KB on disk, about 1.5 GB to decode (85 frames of 1080×1080).
+        $refused($this->fixture('animated-1080-heavy.gif'), 'heavy');
+        // Tiny frames, but more than 300 of them.
+        $refused(\ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(301), 'frames');
         $this->assertSame(0, StoryMedia::query()->count());
 
-        // Just under the budget (25 frames) still goes through, and stays a GIF.
-        $light = $this->upload(2, \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(25, 2000, 2000), 'light.gif', 'image/gif');
+        // A common animation (60 frames of 480×480) still goes through, and stays a GIF.
+        $light = $this->upload(2, $this->fixture('animated-480.gif'), 'light.gif', 'image/gif');
         $this->assertSame(201, $light->getStatusCode(), (string) $light->getBody());
         $this->assertSame('image/gif', $this->json($light)['data']['attributes']['mime']);
     }

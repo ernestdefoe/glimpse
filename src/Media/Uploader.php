@@ -42,11 +42,16 @@ class Uploader
     /** Uploads a member may hold that no story uses yet: enough to compose, not to fill a disk (moderators aren't capped). */
     public const MAX_UNUSED = 10;
 
+    /** Frames an animated GIF may have, however small. */
+    private const MAX_FRAMES = 300;
+
     /**
-     * An animation's pixels across all its frames (1080×1080 at 85 frames). Flarum's default GD driver
-     * keeps this small; Imagick, which an admin may choose, builds every frame at full canvas size.
+     * Bytes a decoded GIF frame costs: Intervention's GD driver builds every frame as a full-canvas
+     * truecolor image and keeps them all (measured: up to 16 bytes a canvas pixel, plus about 20 KB).
      */
-    private const MAX_ANIMATION_PIXELS = 100_000_000;
+    private const FRAME_BYTES_PER_PIXEL = 16;
+
+    private const FRAME_OVERHEAD = 20_000;
 
     public function __construct(
         private readonly Storage $storage,
@@ -201,13 +206,14 @@ class Uploader
         if ($info === false || $info[0] < 1 || $info[1] < 1 || $info[0] * $info[1] > self::MAX_PIXELS) {
             $this->fail('bad_type');
         }
-        // A decoder may turn every GIF frame into a full-canvas image: weigh them all before it starts.
+        // The decoder turns every GIF frame into a full-canvas image: weigh them all before it starts.
         if ($gif) {
             $frames = GifFrames::count($bytes);
             if ($frames === null || $frames < 1) {
                 $this->fail('bad_type');
             }
-            if ($frames * $info[0] * $info[1] > self::MAX_ANIMATION_PIXELS) {
+            $cost = $frames * ($info[0] * $info[1] * self::FRAME_BYTES_PER_PIXEL + self::FRAME_OVERHEAD);
+            if ($frames > self::MAX_FRAMES || $cost > $this->animationBudget()) {
                 $this->fail('too_many_frames');
             }
         }
@@ -230,6 +236,14 @@ class Uploader
             : (string) $image->encode(new WebpEncoder(quality: 82));
 
         return [$encoded, $image->width(), $image->height(), $animated];
+    }
+
+    /** Half of PHP's memory limit (512 MB assumed when there is none), for decoding an animation. */
+    private function animationBudget(): int
+    {
+        $limit = ini_parse_quantity((string) ini_get('memory_limit'));
+
+        return intdiv($limit > 0 ? $limit : 512 * 1024 * 1024, 2);
     }
 
     /** @param array<string, int|string> $params */

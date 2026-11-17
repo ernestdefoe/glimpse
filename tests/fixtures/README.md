@@ -6,3 +6,5 @@ Fixtures for the media tests (all made with ffmpeg / Pillow, nothing copyrighted
 - `long.mp4`: 30 s, longer than the default 15 s limit.
 - `shell.jpg`: PHP code named like a photo.
 - `polyglot.jpg`: JPEG magic bytes followed by HTML.
+- `animated-480.gif`: 60 plain-colored 480×480 frames (made with Imagick): a common animation, about 128 MB to decode.
+- `animated-1080-heavy.gif`: 85 plain-colored 1080×1080 frames (made with Imagick): small on disk, about 1.5 GB to decode.
