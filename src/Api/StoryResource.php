@@ -9,6 +9,7 @@ use ErnestDefoe\Glimpse\Enum\Audience;
 use ErnestDefoe\Glimpse\Enum\Kind;
 use ErnestDefoe\Glimpse\Enum\Status;
 use ErnestDefoe\Glimpse\Flags;
+use ErnestDefoe\Glimpse\MemberLock;
 use ErnestDefoe\Glimpse\Story;
 use ErnestDefoe\Glimpse\StoryWriter;
 use ErnestDefoe\Glimpse\UnseenAuthors;
@@ -46,6 +47,7 @@ class StoryResource extends AbstractDatabaseResource
         private readonly StoryWriter $writer,
         private readonly Engagement $engagement,
         private readonly UnseenAuthors $unseen,
+        private readonly MemberLock $locks,
     ) {
     }
 
@@ -261,14 +263,30 @@ class StoryResource extends AbstractDatabaseResource
         ];
     }
 
-    /** Two stories racing for one upload: the unique key on media_id lets one through. */
+    /**
+     * A new story is counted against the daily limit and saved under the member's lock, so two at once
+     * can't both slip under it; two racing for one upload are settled by the unique key on media_id.
+     */
     protected function saveModel(Model $model, BaseContext $context): void
     {
-        try {
-            parent::saveModel($model, $context);
-        } catch (UniqueConstraintViolationException) {
-            $this->writer->mediaTaken();
+        $save = function () use ($model, $context): void {
+            try {
+                parent::saveModel($model, $context);
+            } catch (UniqueConstraintViolationException) {
+                $this->writer->mediaTaken();
+            }
+        };
+
+        if ($model->exists || ! $model instanceof Story) {
+            $save();
+
+            return;
         }
+
+        $this->locks->run('story', $model->user_id, 'kind', function () use ($model, $save): void {
+            $this->writer->assertUnderDailyLimit($model->user_id);
+            $save();
+        });
     }
 
     /** @param Context $context */

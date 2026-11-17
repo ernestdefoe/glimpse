@@ -73,11 +73,6 @@ class StoryWriter
             $this->fail('audience', 'followers_off');
         }
 
-        $today = Story::query()->where('user_id', $actor->id)->where('created_at', '>', Carbon::now()->subDay())->count();
-        if ($today >= $this->config->dailyLimit()) {
-            $this->fail('kind', 'daily_limit', ['{count}' => $this->config->dailyLimit()]);
-        }
-
         $story->user_id = $actor->id;
         $story->created_at = Carbon::now();
 
@@ -164,6 +159,15 @@ class StoryWriter
             ->all();
 
         $story->mentionedUsers()->sync($ids);
+    }
+
+    /** The daily limit, counted under the member's lock right before the save (StoryResource::saveModel). */
+    public function assertUnderDailyLimit(int $userId): void
+    {
+        $today = Story::query()->where('user_id', $userId)->where('created_at', '>', Carbon::now()->subDay())->count();
+        if ($today >= $this->config->dailyLimit()) {
+            $this->fail('kind', 'daily_limit', ['{count}' => $this->config->dailyLimit()]);
+        }
     }
 
     /** A second story claimed the same upload at the same moment (the unique key caught it): the same answer as the check. */

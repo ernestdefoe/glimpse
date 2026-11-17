@@ -63,6 +63,7 @@ ernestdefoe-glimpse:
       moderate: Approve, hide and delete stories
 
   api:
+    busy: You just did the same thing a moment ago. Please try again.
     upload_failed: The file didn't upload. Please try again.
     too_large: That file is too large.
     bad_type: That file type isn't supported. Use a JPEG, PNG, WebP or GIF photo, or an MP4 or WebM video.

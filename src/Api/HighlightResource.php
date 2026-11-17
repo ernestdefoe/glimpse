@@ -9,6 +9,7 @@ use ErnestDefoe\Glimpse\Config;
 use ErnestDefoe\Glimpse\Flags;
 use ErnestDefoe\Glimpse\Highlight;
 use ErnestDefoe\Glimpse\Ids;
+use ErnestDefoe\Glimpse\MemberLock;
 use ErnestDefoe\Glimpse\Story;
 use Flarum\Api\Context;
 use Flarum\Api\Endpoint;
@@ -16,8 +17,6 @@ use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
-use Illuminate\Contracts\Cache\LockProvider;
-use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -43,7 +42,7 @@ class HighlightResource extends AbstractDatabaseResource
         private readonly TranslatorInterface $translator,
         private readonly ConnectionInterface $db,
         private readonly Flags $flags,
-        private readonly Repository $cache,
+        private readonly MemberLock $locks,
     ) {
     }
 
@@ -140,20 +139,14 @@ class HighlightResource extends AbstractDatabaseResource
             return;
         }
 
-        $save = function () use ($model, $context): void {
+        $this->locks->run('highlight', $model->user_id, 'title', function () use ($model, $context): void {
             $max = $this->config->highlightsMax();
             if (Highlight::query()->where('user_id', $model->user_id)->count() >= $max) {
                 throw new ValidationException(['title' => $this->translator->trans('ernestdefoe-glimpse.api.highlights_full', ['{count}' => $max])]);
             }
             $model->position = Ids::one(Highlight::query()->where('user_id', $model->user_id)->max('position')) + 1;
             parent::saveModel($model, $context);
-        };
-
-        // Every cache store Flarum ships (file, array, redis) can lock; one that can't still checks the limit.
-        $store = $this->cache->getStore();
-        $store instanceof LockProvider
-            ? $store->lock('ernestdefoe-glimpse.highlight.'.$model->user_id, 10)->block(5, $save)
-            : $save();
+        });
     }
 
     /** @param Builder<Story>|Relation<Story, Highlight, mixed> $query */
