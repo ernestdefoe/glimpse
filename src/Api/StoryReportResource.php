@@ -64,6 +64,7 @@ class StoryReportResource extends AbstractDatabaseResource
                 ->eagerLoad(['user.groups', 'story.user.groups'])
                 ->defaultSort('-createdAt')
                 ->paginate(20, 50),
+            // Members only: a guest gets 401 before the story is looked up (GuestWriteTest).
             Endpoint\Create::make()
                 ->authenticated(),
             Endpoint\Delete::make()
