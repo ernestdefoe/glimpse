@@ -61,6 +61,30 @@ class CollectionsTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function only_the_owner_may_change_or_delete_a_highlight_not_a_guest_member_or_moderator(): void
+    {
+        $id = $this->json($this->highlight(2, 'Mine', [$this->text(2)]))['data']['id'];
+        $rename = fn (?int $as) => $this->send($this->request('PATCH', "/api/glimpse-highlights/$id", ($as ? ['authenticatedAs' => $as] : []) + ['json' => ['data' => ['type' => 'glimpse-highlights', 'id' => $id, 'attributes' => ['title' => 'Taken']]]]));
+        $delete = fn (?int $as) => $this->send($this->request('DELETE', "/api/glimpse-highlights/$id", $as ? ['authenticatedAs' => $as] : []));
+
+        // A guest write is refused before any endpoint runs (no session, so no CSRF token), and the policy says no too.
+        $this->assertSame(400, $rename(null)->getStatusCode(), 'guest rename');
+        $this->assertSame(400, $delete(null)->getStatusCode(), 'guest delete');
+        $highlight = \ErnestDefoe\Glimpse\Highlight::query()->findOrFail($id);
+        $this->assertFalse((new \Flarum\User\Guest())->can('update', $highlight));
+        $this->assertFalse((new \Flarum\User\Guest())->can('delete', $highlight));
+        foreach ([4 => 'member', 5 => 'moderator', 1 => 'admin'] as $as => $who) {
+            $this->assertSame(403, $rename($as)->getStatusCode(), "$who rename");
+            $this->assertSame(403, $delete($as)->getStatusCode(), "$who delete");
+        }
+        $this->assertSame('Mine', $this->database()->table('glimpse_highlights')->where('id', $id)->value('title'));
+
+        $this->assertSame(200, $rename(2)->getStatusCode());
+        $this->assertSame(204, $delete(2)->getStatusCode());
+        $this->assertSame(0, $this->database()->table('glimpse_highlights')->where('id', $id)->count());
+    }
+
+    #[Test]
     public function the_highlight_limit_holds(): void
     {
         $this->setting('ernestdefoe-glimpse.highlights_max', 1);

@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 use ErnestDefoe\Glimpse\Access\HideFromIgnored;
 use ErnestDefoe\Glimpse\Access\HideSuspendedAuthors;
+use ErnestDefoe\Glimpse\Access\HighlightPolicy;
 use ErnestDefoe\Glimpse\Access\ScopeStoryVisibility;
 use ErnestDefoe\Glimpse\Access\StoryPolicy;
 use ErnestDefoe\Glimpse\Api;
@@ -25,6 +26,7 @@ use ErnestDefoe\Glimpse\Console\PruneCommand;
 use ErnestDefoe\Glimpse\Event\Published;
 use ErnestDefoe\Glimpse\Follows\FollowsServiceProvider;
 use ErnestDefoe\Glimpse\GlimpseServiceProvider;
+use ErnestDefoe\Glimpse\Highlight;
 use ErnestDefoe\Glimpse\Ignores\IgnoresServiceProvider;
 use ErnestDefoe\Glimpse\Http\MediaController;
 use ErnestDefoe\Glimpse\Listener\DeleteMemberData;
@@ -85,7 +87,8 @@ return [
         ->scope(ScopeStoryVisibility::class),
 
     (new Extend\Policy())
-        ->modelPolicy(Story::class, StoryPolicy::class),
+        ->modelPolicy(Story::class, StoryPolicy::class)
+        ->modelPolicy(Highlight::class, HighlightPolicy::class),
 
     (new Extend\SearchDriver(DatabaseSearchDriver::class))
         ->addSearcher(Story::class, Search\StorySearcher::class)

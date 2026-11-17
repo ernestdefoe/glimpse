@@ -68,8 +68,6 @@ class HighlightResource extends AbstractDatabaseResource
 
     public function endpoints(): array
     {
-        $owner = fn (Highlight $highlight, Context $context): bool => $highlight->user_id === $context->getActor()->id;
-
         return [
             Endpoint\Index::make()
                 ->defaultInclude(['stories'])
@@ -84,13 +82,14 @@ class HighlightResource extends AbstractDatabaseResource
                 ->authenticated()
                 ->can('glimpse.create')
                 ->defaultInclude(['stories']),
+            // Owner only (Access\HighlightPolicy).
             Endpoint\Update::make()
                 ->authenticated()
-                ->visible($owner)
+                ->can('update')
                 ->defaultInclude(['stories']),
             Endpoint\Delete::make()
                 ->authenticated()
-                ->visible($owner),
+                ->can('delete'),
         ];
     }
 
