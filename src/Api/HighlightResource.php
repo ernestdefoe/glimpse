@@ -16,7 +16,6 @@ use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
-use Flarum\User\Exception\PermissionDeniedException;
 use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\ConnectionInterface;
@@ -115,7 +114,7 @@ class HighlightResource extends AbstractDatabaseResource
                 // The viewer's visibility rule and flags (seen, reaction), and the media: one query for every story.
                 ->scope(fn (Builder|Relation $query, Context $context) => $this->scopeStories($query, $context))
                 // Checked before the highlight is written; synced (instead of Flarum's plain sync) after.
-                ->set(fn (Highlight $highlight, array $stories, Context $context) => $this->checkStories($highlight, $stories, $context))
+                ->set(fn (Highlight $highlight, array $stories) => $this->checkStories($stories))
                 ->save(fn (Highlight $highlight, array $stories, Context $context) => $this->saveStories($highlight, $stories, $context)),
         ];
     }
@@ -167,16 +166,12 @@ class HighlightResource extends AbstractDatabaseResource
     }
 
     /**
-     * Before anything is written: only the owner edits a highlight, and it holds at most the admin's limit.
+     * Before anything is written: a highlight holds at most the admin's limit (only its owner gets here: HighlightPolicy).
      *
      * @param array<mixed> $stories
      */
-    private function checkStories(Highlight $highlight, array $stories, Context $context): void
+    private function checkStories(array $stories): void
     {
-        if ($highlight->exists && $highlight->user_id !== $context->getActor()->id) {
-            throw new PermissionDeniedException();
-        }
-
         if (count($stories) > $this->config->highlightStoriesMax()) {
             throw new ValidationException(['stories' => $this->translator->trans('ernestdefoe-glimpse.api.highlight_full', ['{count}' => $this->config->highlightStoriesMax()])]);
         }

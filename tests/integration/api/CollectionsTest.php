@@ -79,6 +79,15 @@ class CollectionsTest extends GlimpseTestCase
         }
         $this->assertSame('Mine', $this->database()->table('glimpse_highlights')->where('id', $id)->value('title'));
 
+        // Refilling someone else's highlight with your own story is refused the same way.
+        $mine = $this->text(4);
+        $refill = $this->send($this->request('PATCH', "/api/glimpse-highlights/$id", ['authenticatedAs' => 4, 'json' => ['data' => [
+            'type' => 'glimpse-highlights', 'id' => $id,
+            'relationships' => ['stories' => ['data' => [['type' => 'glimpse-stories', 'id' => (string) $mine]]]],
+        ]]]));
+        $this->assertSame(403, $refill->getStatusCode());
+        $this->assertSame(0, $this->database()->table('glimpse_highlight_stories')->where('story_id', $mine)->count());
+
         $this->assertSame(200, $rename(2)->getStatusCode());
         $this->assertSame(204, $delete(2)->getStatusCode());
         $this->assertSame(0, $this->database()->table('glimpse_highlights')->where('id', $id)->count());
