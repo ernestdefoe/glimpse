@@ -20,7 +20,6 @@ export default [
         help: t('lifetime_help'),
         // String keys: integer-like keys would be re-sorted by JS.
         options: { '6': t('hours.6'), '12': t('hours.12'), '24': t('hours.24'), '48': t('hours.48'), '168': t('hours.168') },
-        default: '24',
       }),
       100
     )
@@ -40,7 +39,6 @@ export default [
         type: 'select',
         label: t('bar_placement'),
         options: options(['index', 'index_tags', 'page', 'none'], 'placement'),
-        default: 'index',
       }),
       80
     )
@@ -51,7 +49,6 @@ export default [
         label: t('bar_order'),
         help: t('bar_order_help'),
         options: options(['smart', 'newest'], 'order'),
-        default: 'smart',
       }),
       79
     )
@@ -61,7 +58,6 @@ export default [
         type: 'select',
         label: t('default_audience'),
         options: options(installed('ianm-follow-users') ? ['everyone', 'members', 'followers'] : ['everyone', 'members'], 'audience'),
-        default: 'everyone',
       }),
       70
     )
@@ -83,7 +79,6 @@ export default [
         label: t('reply_via'),
         help: t('reply_via_help'),
         options: options(channels, 'reply'),
-        default: 'auto',
       });
     }, 59)
     .setting(() => ({ setting: setting('approval_posts'), type: 'number', min: 0, label: t('approval_posts'), help: t('approval_help') }), 50)
