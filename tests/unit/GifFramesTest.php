@@ -30,10 +30,13 @@ class GifFramesTest extends TestCase
     }
 
     #[Test]
-    public function blocks_that_do_not_add_up_are_not_a_gif(): void
+    public function what_decoders_still_open_is_counted_and_anything_else_is_not_a_gif(): void
     {
+        // Cut off in the middle of its second frame, or with a stray empty block before the trailer.
+        $this->assertSame(2, GifFrames::count(substr(self::gif(2), 0, -6)));
+        $this->assertSame(2, GifFrames::count(substr(self::gif(2), 0, -1)."\x00\x3B"));
+
         $this->assertNull(GifFrames::count('GIF89a'));
-        $this->assertNull(GifFrames::count(substr(self::gif(2), 0, -6)));
         $this->assertNull(GifFrames::count(substr(self::gif(1), 0, -1)."\x99"));
     }
 }

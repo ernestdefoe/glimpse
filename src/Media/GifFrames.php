@@ -10,7 +10,7 @@ namespace ErnestDefoe\Glimpse\Media;
  */
 final class GifFrames
 {
-    /** The number of frames, or null when the blocks don't add up to a GIF. */
+    /** The number of frames, or null when a block is neither a GIF block nor the end of the file. */
     public static function count(string $bytes): ?int
     {
         $length = strlen($bytes);
@@ -29,17 +29,21 @@ final class GifFrames
                     $pos = self::skipSubBlocks($bytes, $pos + 2);
                     break;
                 case "\x2C": // Image descriptor (10 bytes), local color table, LZW code size, sub-blocks.
-                    if ($pos + 10 > $length) {
-                        return null;
-                    }
+                    // A frame cut off at the end still counts: decoders show what arrived of it.
                     $frames++;
+                    if ($pos + 10 > $length) {
+                        return $frames;
+                    }
                     $pos = self::skipSubBlocks($bytes, $pos + 10 + self::colorTable(ord($bytes[$pos + 9])) + 1);
+                    break;
+                case "\x00": // A stray empty block between frames, which some encoders write.
+                    $pos++;
                     break;
                 default:
                     return null;
             }
             if ($pos === null) {
-                return null;
+                return $frames;
             }
         }
 
