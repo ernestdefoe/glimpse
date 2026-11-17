@@ -214,8 +214,11 @@ class Uploader
     {
         // Dimensions from the header before decoding, so a small file claiming to be huge never reaches the decoder.
         $info = @getimagesizefromstring($bytes);
-        if ($info === false || $info[0] < 1 || $info[1] < 1 || $info[0] * $info[1] > self::MAX_PIXELS) {
+        if ($info === false || $info[0] < 1 || $info[1] < 1) {
             $this->fail('bad_type');
+        }
+        if ($info[0] * $info[1] > self::MAX_PIXELS) {
+            $this->fail('too_many_pixels', ['{max}' => intdiv(self::MAX_PIXELS, 1_000_000)]);
         }
         // The decoder turns every GIF frame into a full-canvas image: weigh them all before it starts.
         if ($gif) {

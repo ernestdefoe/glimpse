@@ -113,6 +113,18 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function a_photo_over_the_megapixel_limit_is_refused_with_its_own_message(): void
+    {
+        // A PNG header claiming 10000×10000 (100 megapixels): refused before any decoding.
+        $ihdr = 'IHDR'.pack('NN', 10000, 10000)."\x08\x02\x00\x00\x00";
+        $png = "\x89PNG\r\n\x1a\n".pack('N', 13).$ihdr.pack('N', crc32($ihdr));
+
+        $response = $this->upload(2, $png, 'huge.png', 'image/png');
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertMatchesRegularExpression('/too_many_pixels|megapixels/', (string) $response->getBody());
+    }
+
+    #[Test]
     public function an_animated_gif_is_weighed_by_what_decoding_all_its_frames_costs(): void
     {
         $this->setting('ernestdefoe-glimpse.flood_seconds', 0);
