@@ -6,8 +6,6 @@ namespace ErnestDefoe\Glimpse;
 
 use Carbon\CarbonInterface;
 use Flarum\Database\AbstractModel;
-use Flarum\User\User;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * An uploaded photo or video, already checked and cleaned by Media\Uploader. Served only through
@@ -23,7 +21,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $duration_ms
  * @property int $size
  * @property CarbonInterface $created_at
- * @property-read User|null $user
  */
 class StoryMedia extends AbstractModel
 {
@@ -39,10 +36,4 @@ class StoryMedia extends AbstractModel
         'size' => 'integer',
         'created_at' => 'datetime',
     ];
-
-    /** @return BelongsTo<User, $this> */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
 }

@@ -14,7 +14,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $user_id
  * @property int $muted_user_id
  * @property CarbonInterface $created_at
- * @property-read User|null $user
  * @property-read User|null $mutedUser
  */
 class StoryMute extends AbstractModel
@@ -24,12 +23,6 @@ class StoryMute extends AbstractModel
     public $timestamps = false;
 
     protected $casts = ['user_id' => 'integer', 'muted_user_id' => 'integer', 'created_at' => 'datetime'];
-
-    /** @return BelongsTo<User, $this> */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
 
     /** @return BelongsTo<User, $this> */
     public function mutedUser(): BelongsTo

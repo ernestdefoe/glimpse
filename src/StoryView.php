@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $reaction
  * @property CarbonInterface|null $reacted_at
  * @property-read User|null $user
- * @property-read Story|null $story
  */
 class StoryView extends AbstractModel
 {
@@ -40,11 +39,5 @@ class StoryView extends AbstractModel
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    /** @return BelongsTo<Story, $this> */
-    public function story(): BelongsTo
-    {
-        return $this->belongsTo(Story::class, 'story_id');
     }
 }
