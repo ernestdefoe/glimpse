@@ -54,6 +54,25 @@ class ScrubberTest extends TestCase
     }
 
     #[Test]
+    public function an_mp4_duration_past_an_int_reads_as_negative_for_the_uploader_to_refuse(): void
+    {
+        // ftyp, then moov holding a version-1 mvhd: timescale 1, a 64-bit duration.
+        $mp4 = function (string $duration): string {
+            $mvhd = "\x01\x00\x00\x00".str_repeat("\x00", 16).pack('N', 1).$duration.str_repeat("\x00", 80);
+            $mvhd = pack('N', 8 + strlen($mvhd)).'mvhd'.$mvhd;
+
+            return pack('N', 16).'ftypisom'.pack('N', 0).pack('N', 8 + strlen($mvhd)).'moov'.$mvhd;
+        };
+
+        // All bits set: negative as a PHP int. 2^62 seconds: milliseconds past any int.
+        foreach (["\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", pack('J', 1 << 62)] as $duration) {
+            [$clean] = $this->scrub(new Mp4Scrubber(), $mp4($duration));
+            $this->assertNotNull($clean);
+            $this->assertLessThan(0, $clean['durationMs'], bin2hex($duration));
+        }
+    }
+
+    #[Test]
     public function every_fixture_scrubs_to_exactly_the_bytes_it_did_before_streams(): void
     {
         // SHA-256 of each fixture's scrubbed bytes from 1.0.5, which scrubbed a native file handle.

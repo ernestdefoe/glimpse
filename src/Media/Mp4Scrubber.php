@@ -93,7 +93,10 @@ class Mp4Scrubber
         $scale = $file->uint32($offset);
         $duration = $version === 1 ? $file->uint64($offset + 4) : $file->uint32($offset + 4);
         if ($scale > 0) {
-            $this->durationMs = (int) round($duration / $scale * 1000);
+            // A 64-bit duration past PHP's int range reads as negative; one too large for an int as -1
+            // (a cast would be undefined). The uploader refuses both.
+            $ms = round($duration / $scale * 1000);
+            $this->durationMs = is_finite($ms) && abs($ms) < 9.0e18 ? (int) $ms : -1;
         }
     }
 }
