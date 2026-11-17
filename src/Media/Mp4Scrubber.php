@@ -43,6 +43,9 @@ class Mp4Scrubber
 
         $pos = $start;
         while ($pos + 8 <= $end) {
+            if (! $file->nextElement()) {
+                return false;
+            }
             $header = 8;
             $size = $file->uint32($pos);
             $type = $file->read($pos + 4, 4);

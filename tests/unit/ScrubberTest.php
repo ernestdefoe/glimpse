@@ -73,6 +73,23 @@ class ScrubberTest extends TestCase
     }
 
     #[Test]
+    public function a_video_made_of_thousands_of_empty_boxes_is_refused_without_walking_them_all(): void
+    {
+        $voids = str_repeat("\xEC\x80", 20_000);
+        // An EBML header, then a Segment (8-byte size) holding only 2-byte Void elements.
+        $webm = "\x1A\x45\xDF\xA3\x87\x42\x82\x84webm"."\x18\x53\x80\x67\x01".substr(pack('J', strlen($voids)), 1).$voids;
+        // ftyp, then nothing but 8-byte free boxes.
+        $mp4 = pack('N', 16).'ftypisom'.pack('N', 0).str_repeat(pack('N', 8).'free', 20_000);
+
+        foreach (['webm' => [new WebmScrubber(), $webm], 'mp4' => [new Mp4Scrubber(), $mp4]] as $name => [$scrubber, $bytes]) {
+            $started = microtime(true);
+            [$clean] = $this->scrub($scrubber, $bytes);
+            $this->assertNull($clean, $name);
+            $this->assertLessThan(2.0, microtime(true) - $started, $name);
+        }
+    }
+
+    #[Test]
     public function every_fixture_scrubs_to_exactly_the_bytes_it_did_before_streams(): void
     {
         // SHA-256 of each fixture's scrubbed bytes from 1.0.5, which scrubbed a native file handle.

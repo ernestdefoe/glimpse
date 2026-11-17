@@ -61,6 +61,9 @@ class WebmScrubber
         $pos = $start;
 
         while ($pos < $segmentEnd) {
+            if (! $file->nextElement()) {
+                return null;
+            }
             $child = $this->element($file, $pos, $segmentEnd);
             if ($child === null) {
                 break;
@@ -106,6 +109,9 @@ class WebmScrubber
         $pos = $start;
 
         while ($pos < $end) {
+            if (! $file->nextElement()) {
+                return false;
+            }
             $el = $this->element($file, $pos, $end);
             if ($el === null || $el['size'] === null || $el['dataStart'] + $el['size'] > $end) {
                 return false;

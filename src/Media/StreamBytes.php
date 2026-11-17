@@ -12,8 +12,22 @@ use Psr\Http\Message\StreamInterface;
  */
 final class StreamBytes
 {
+    /**
+     * Boxes or elements a scrub may visit in all. Real videos have a few hundred at most; a file of
+     * thousands of tiny empty ones exists only to keep the server busy, and is refused.
+     */
+    public const MAX_ELEMENTS = 10_000;
+
+    private int $elements = 0;
+
     public function __construct(private readonly StreamInterface $stream)
     {
+    }
+
+    /** Counts one more box or element; false once there have been too many to be a real video. */
+    public function nextElement(): bool
+    {
+        return ++$this->elements <= self::MAX_ELEMENTS;
     }
 
     public function size(): int
