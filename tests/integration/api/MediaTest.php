@@ -83,6 +83,22 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function an_animated_gif_is_weighed_by_all_its_frames_before_it_is_decoded(): void
+    {
+        // 26 frames on a 2000×2000 canvas: 104 million pixels to decode, over the 100 million budget.
+        $heavy = $this->upload(2, \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(26, 2000, 2000), 'heavy.gif', 'image/gif');
+        $this->assertSame(422, $heavy->getStatusCode());
+        // The test catalogue has no extension locales: the key or its text.
+        $this->assertMatchesRegularExpression('/too_many_frames|too many frames/', (string) $heavy->getBody());
+        $this->assertSame(0, StoryMedia::query()->count());
+
+        // Just under the budget (25 frames) still goes through, and stays a GIF.
+        $light = $this->upload(2, \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(25, 2000, 2000), 'light.gif', 'image/gif');
+        $this->assertSame(201, $light->getStatusCode(), (string) $light->getBody());
+        $this->assertSame('image/gif', $this->json($light)['data']['attributes']['mime']);
+    }
+
+    #[Test]
     public function a_video_declaring_a_negative_length_is_refused_and_nothing_is_kept(): void
     {
         // tagged.webm with its Duration (an 8-byte float at offset 270) set to -2000 ms.

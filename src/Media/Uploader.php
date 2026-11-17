@@ -37,6 +37,12 @@ class Uploader
     /** Pixels a header may claim before the decoder is trusted with it. */
     private const MAX_PIXELS = 40_000_000;
 
+    /**
+     * An animation's pixels across all its frames (1080×1080 at 85 frames). Flarum's default GD driver
+     * keeps this small; Imagick, which an admin may choose, builds every frame at full canvas size.
+     */
+    private const MAX_ANIMATION_PIXELS = 100_000_000;
+
     public function __construct(
         private readonly Storage $storage,
         private readonly Config $config,
@@ -165,6 +171,16 @@ class Uploader
         $info = @getimagesizefromstring($bytes);
         if ($info === false || $info[0] < 1 || $info[1] < 1 || $info[0] * $info[1] > self::MAX_PIXELS) {
             $this->fail('bad_type');
+        }
+        // A decoder may turn every GIF frame into a full-canvas image: weigh them all before it starts.
+        if ($gif) {
+            $frames = GifFrames::count($bytes);
+            if ($frames === null || $frames < 1) {
+                $this->fail('bad_type');
+            }
+            if ($frames * $info[0] * $info[1] > self::MAX_ANIMATION_PIXELS) {
+                $this->fail('too_many_frames');
+            }
         }
 
         try {
