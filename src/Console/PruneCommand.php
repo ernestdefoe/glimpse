@@ -17,8 +17,8 @@ use Symfony\Component\Console\Input\InputOption;
 /**
  * Deletes what has run its course, in chunks, with whole-set DELETEs (never one row at a time):
  *
- * - stories past their expiry that no highlight keeps, with their views, mentions and reports
- *   (foreign keys), their media rows, and then their files;
+ * - stories past their expiry that no highlight keeps: Cleanup deletes their views, reports,
+ *   mentions and highlight links, the stories and their media rows in one transaction, then the files;
  * - uploads no story ever used, once they are a day old.
  *
  * Scheduled hourly. Safe to run twice or at the same time as itself.

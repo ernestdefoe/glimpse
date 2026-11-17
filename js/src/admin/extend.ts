@@ -18,7 +18,7 @@ export default [
         type: 'select',
         label: t('lifetime'),
         help: t('lifetime_help'),
-        // String keys: integer-like keys would be re-sorted by JS.
+        // Integer-like keys (quoted or not) are always listed in ascending order by JS; these already are.
         options: { '6': t('hours.6'), '12': t('hours.12'), '24': t('hours.24'), '48': t('hours.48'), '168': t('hours.168') },
       }),
       100
