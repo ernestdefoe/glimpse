@@ -126,6 +126,24 @@ class CollectionsTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function only_moderators_can_filter_stories_by_whether_they_have_reports(): void
+    {
+        $reported = $this->text(2);
+        $clean = $this->text(2);
+        $this->database()->table('glimpse_reports')->insert(['story_id' => $reported, 'user_id' => 3, 'reason' => 'spam', 'created_at' => \Carbon\Carbon::now()]);
+
+        // Members, the author and guests learn nothing either way round.
+        foreach ([4 => 'member', 2 => 'author', 3 => 'reporter', null => 'guest'] as $as => $who) {
+            $as = $as === '' ? null : $as;
+            $this->assertSame([], $this->ids($as, ['reported' => '1']), $who);
+            $this->assertSame([], $this->ids($as, ['-reported' => '1']), "$who, negated");
+        }
+
+        $this->assertSame([$reported], $this->ids(5, ['reported' => '1']));
+        $this->assertSame([$clean], $this->ids(5, ['-reported' => '1']));
+    }
+
+    #[Test]
     public function a_story_you_cannot_see_is_reported_as_missing_exactly_like_one_that_never_existed(): void
     {
         $report = fn (int $id): \Psr\Http\Message\ResponseInterface => $this->send($this->request('POST', '/api/glimpse-reports', ['authenticatedAs' => 4, 'json' => ['data' => [
