@@ -188,4 +188,15 @@ class CreateTest extends GlimpseTestCase
         $this->uploadId(5);
         $this->uploadId(5);
     }
+
+    #[Test]
+    public function one_upload_can_belong_to_only_one_story_even_in_a_race(): void
+    {
+        // The check in StoryWriter covers the usual case; the unique key covers two requests at once.
+        $media = $this->database()->table('glimpse_media')->insertGetId(['user_id' => 2, 'kind' => 'image', 'mime' => 'image/webp', 'path' => '2026/11/'.str_repeat('c', 32).'.webp', 'width' => 10, 'height' => 10, 'size' => 10, 'created_at' => \Carbon\Carbon::now()]);
+        $this->insert(2, ['kind' => 'photo', 'text' => null, 'media_id' => $media]);
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->insert(2, ['kind' => 'photo', 'text' => null, 'media_id' => $media]);
+    }
 }

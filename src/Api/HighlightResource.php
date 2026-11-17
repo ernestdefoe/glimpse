@@ -17,8 +17,11 @@ use Flarum\Api\Schema;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
 use Flarum\User\Exception\PermissionDeniedException;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Tobyz\JsonApiServer\Context as BaseContext;
 use Tobyz\JsonApiServer\Pagination\Pagination;
@@ -41,6 +44,7 @@ class HighlightResource extends AbstractDatabaseResource
         private readonly TranslatorInterface $translator,
         private readonly ConnectionInterface $db,
         private readonly Flags $flags,
+        private readonly Repository $cache,
     ) {
     }
 
@@ -120,17 +124,38 @@ class HighlightResource extends AbstractDatabaseResource
     /** @param Context $context */
     public function creating(object $model, BaseContext $context): ?object
     {
-        $actor = $context->getActor();
-        if (Highlight::query()->where('user_id', $actor->id)->count() >= $this->config->highlightsMax()) {
-            throw new ValidationException(['title' => $this->translator->trans('ernestdefoe-glimpse.api.highlights_full', ['{count}' => $this->config->highlightsMax()])]);
-        }
-
-        $model->user_id = $actor->id;
-        $last = Highlight::query()->where('user_id', $actor->id)->max('position');
-        $model->position = Ids::one($last) + 1;
+        $model->user_id = $context->getActor()->id;
         $model->created_at = Carbon::now();
 
         return $model;
+    }
+
+    /**
+     * A new highlight is counted against the limit and given the next position under a per-member lock,
+     * so two created at once can't both slip under the limit or share a position.
+     */
+    protected function saveModel(Model $model, BaseContext $context): void
+    {
+        if ($model->exists || ! $model instanceof Highlight) {
+            parent::saveModel($model, $context);
+
+            return;
+        }
+
+        $save = function () use ($model, $context): void {
+            $max = $this->config->highlightsMax();
+            if (Highlight::query()->where('user_id', $model->user_id)->count() >= $max) {
+                throw new ValidationException(['title' => $this->translator->trans('ernestdefoe-glimpse.api.highlights_full', ['{count}' => $max])]);
+            }
+            $model->position = Ids::one(Highlight::query()->where('user_id', $model->user_id)->max('position')) + 1;
+            parent::saveModel($model, $context);
+        };
+
+        // Every cache store Flarum ships (file, array, redis) can lock; one that can't still checks the limit.
+        $store = $this->cache->getStore();
+        $store instanceof LockProvider
+            ? $store->lock('ernestdefoe-glimpse.highlight.'.$model->user_id, 10)->block(5, $save)
+            : $save();
     }
 
     /** @param Builder<Story>|Relation<Story, Highlight, mixed> $query */
