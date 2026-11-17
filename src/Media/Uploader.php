@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace ErnestDefoe\Glimpse\Media;
 
 use Carbon\Carbon;
+use ErnestDefoe\Glimpse\Cleanup;
 use ErnestDefoe\Glimpse\Config;
+use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\MemberLock;
 use ErnestDefoe\Glimpse\StoryMedia;
 use Flarum\Foundation\ValidationException;
@@ -39,7 +41,7 @@ class Uploader
     /** Pixels a header may claim before the decoder is trusted with it. */
     private const MAX_PIXELS = 40_000_000;
 
-    /** Uploads a member may hold that no story uses yet: enough to compose, not to fill a disk (moderators aren't capped). */
+    /** Uploads a member may hold that no story uses yet, counting the one being made: enough to compose, not to fill a disk. */
     public const MAX_UNUSED = 10;
 
     /** Frames an animated GIF may have, however small. */
@@ -62,30 +64,38 @@ class Uploader
         private readonly WebmScrubber $webm,
         private readonly StreamFactory $streams,
         private readonly MemberLock $locks,
+        private readonly Cleanup $cleanup,
     ) {
     }
 
     public function upload(User $actor, UploadedFileInterface $file): StoryMedia
     {
-        // Counted and stored under the member's lock, so uploads sent at once can't pass the cap together.
+        // Under the member's lock, so uploads sent at once can't pass the cap together.
         return $this->locks->run('upload', $actor->id, 'file', function () use ($actor, $file): StoryMedia {
-            if (! $actor->hasPermission('glimpse.moderate') && $this->unusedCount($actor) >= self::MAX_UNUSED) {
-                $this->fail('too_many_uploads', ['{max}' => self::MAX_UNUSED]);
-            }
+            $this->makeRoom($actor);
 
             return $this->store($actor, $file);
         });
     }
 
-    /** Uploads of the member's that no story uses yet (pruned after a day). */
-    private function unusedCount(User $actor): int
+    /**
+     * Keeps at most MAX_UNUSED uploads a member hasn't shared: the create sheet uploads every pick, so
+     * the oldest unused ones make way (with their files) instead of the member being refused.
+     */
+    private function makeRoom(User $actor): void
     {
-        return StoryMedia::query()
+        $stale = Ids::of(StoryMedia::query()
             ->where('user_id', $actor->id)
             ->whereNotExists(fn (QueryBuilder $used) => $used->select('glimpse_stories.media_id')
                 ->from('glimpse_stories')
                 ->whereColumn('glimpse_stories.media_id', 'glimpse_media.id'))
-            ->count();
+            ->orderByDesc('id')
+            ->skip(self::MAX_UNUSED - 1)
+            ->limit(100)
+            ->pluck('id'));
+        if ($stale !== []) {
+            $this->cleanup->uploads($stale);
+        }
     }
 
     private function store(User $actor, UploadedFileInterface $file): StoryMedia

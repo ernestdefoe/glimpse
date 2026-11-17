@@ -68,7 +68,6 @@ ernestdefoe-glimpse:
     too_large: That file is too large.
     bad_type: That file type isn't supported. Use a JPEG, PNG, WebP or GIF photo, or an MP4 or WebM video.
     too_long: Videos can be up to {max} seconds long.
-    too_many_uploads: You have {max} uploads that haven't been shared yet. Share one of them first, or try again tomorrow.
     too_many_frames: That animated GIF has too many frames for its size. Try a shorter or smaller one.
     kind_off: This kind of story is turned off.
     media_missing: Add a photo or video first.

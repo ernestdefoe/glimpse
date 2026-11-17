@@ -83,30 +83,33 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
-    public function a_member_holds_at_most_ten_uploads_that_no_story_uses(): void
+    public function a_member_keeps_at_most_ten_unshared_uploads_and_the_oldest_make_way(): void
     {
         $this->setting('ernestdefoe-glimpse.flood_seconds', 0);
         $gif = \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(1, 4, 4);
-        $ids = [];
-        for ($i = 0; $i < 10; $i++) {
+        $upload = function () use ($gif): string {
             $response = $this->upload(2, $gif, 'a.gif', 'image/gif');
             $this->assertSame(201, $response->getStatusCode(), (string) $response->getBody());
-            $ids[] = $this->json($response)['data']['id'];
+
+            return $this->json($response)['data']['id'];
+        };
+        $ids = [];
+        for ($i = 0; $i < 3; $i++) {
+            $ids[] = $upload();
         }
-
-        $eleventh = $this->upload(2, $gif, 'a.gif', 'image/gif');
-        $this->assertSame(422, $eleventh->getStatusCode());
-        $this->assertMatchesRegularExpression('/too_many_uploads|haven\'t been shared/', (string) $eleventh->getBody());
-        $this->assertSame(10, StoryMedia::query()->where('user_id', 2)->count(), 'Nothing stored for the refused one.');
-
-        // Sharing one frees a place.
+        // The first one is shared: it is never cleared, however many come after.
         $this->assertSame(201, $this->post(2, ['kind' => 'photo', 'audience' => 'everyone'], $ids[0])->getStatusCode());
-        $this->assertSame(201, $this->upload(2, $gif, 'a.gif', 'image/gif')->getStatusCode());
-
-        // Moderators aren't capped.
-        for ($i = 0; $i < 11; $i++) {
-            $this->assertSame(201, $this->upload(5, $gif, 'a.gif', 'image/gif')->getStatusCode());
+        $firstUnused = StoryMedia::query()->findOrFail($ids[1]);
+        for ($i = 0; $i < 12; $i++) {
+            $ids[] = $upload();
         }
+
+        $unused = StoryMedia::query()->where('user_id', 2)->whereKeyNot($ids[0])->orderBy('id')->pluck('id')->all();
+        $this->assertCount(10, $unused, 'Never refused; at most ten unshared kept.');
+        $this->assertSame(array_map('intval', array_slice($ids, -10)), array_map('intval', $unused), 'The newest ten.');
+        $this->assertNotNull(StoryMedia::query()->find($ids[0]), 'The shared one stays.');
+        $disk = $this->app()->getContainer()->make(\ErnestDefoe\Glimpse\Media\Storage::class)->disk();
+        $this->assertFalse($disk->exists($firstUnused->path), 'A cleared upload takes its file with it.');
     }
 
     #[Test]
