@@ -19,6 +19,8 @@ use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
 use Flarum\Http\UrlGenerator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Laminas\Diactoros\Response\EmptyResponse;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
@@ -70,7 +72,10 @@ class StoryResource extends AbstractDatabaseResource
     public function endpoints(): array
     {
         return [
-            // Author groups and media come with StorySearcher's query (media never via eagerLoad: see scope()).
+            // No N+1: media and author groups are eager-loaded by StorySearcher's query (one IN query each),
+            // proved by QueryCountTest (1 vs 24 photo/video stories). Media is deliberately NOT in eagerLoad():
+            // an endpoint eagerLoad runs through StoryMediaResource's owner-only scope and would null every
+            // other member's media (that was the 1.0.0 Show bug).
             Endpoint\Index::make()
                 ->defaultInclude(['user'])
                 ->defaultSort('-createdAt')
@@ -254,6 +259,16 @@ class StoryResource extends AbstractDatabaseResource
         return [
             SortColumn::make('createdAt'),
         ];
+    }
+
+    /** Two stories racing for one upload: the unique key on media_id lets one through. */
+    protected function saveModel(Model $model, BaseContext $context): void
+    {
+        try {
+            parent::saveModel($model, $context);
+        } catch (UniqueConstraintViolationException) {
+            $this->writer->mediaTaken();
+        }
     }
 
     /** @param Context $context */

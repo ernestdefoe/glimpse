@@ -33,6 +33,10 @@ Stories for Flarum 2, called Glimpses on your forum: short photo, video and text
 
 The bar is one request, and costs the same few queries for one person or thirty. The viewer, the create sheet and the pages load only when opened. Expired stories and unused uploads are deleted every hour with their files (`php flarum glimpse:prune`, scheduled; Flarum's scheduler must be running).
 
+## API notes
+
+- `GET /api/glimpse-stories` loads each story's media and author groups in the story query itself (StorySearcher, and `scope()` for a single story), not through an endpoint `eagerLoad()`. An endpoint eager load runs through the media resource's owner-only scope (which stops a member attaching someone else's upload) and would blank everyone else's media. Query counts stay flat from 1 to 24 stories (QueryCountTest).
+
 ## Install
 
 ```sh
