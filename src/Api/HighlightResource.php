@@ -56,12 +56,31 @@ class HighlightResource extends AbstractDatabaseResource
         return Highlight::class;
     }
 
-    /** @param Builder<Highlight> $query */
+    /**
+     * Its owner and moderators see every highlight; anyone else only one holding a story they may see,
+     * so a title never shows for stories kept from them (followers only, hidden, an author who ignores
+     * them, a suspended author).
+     *
+     * @param Builder<Highlight> $query
+     */
     public function scope(Builder $query, BaseContext $context): void
     {
-        if (! $context->getActor()->hasPermission('glimpse.view')) {
+        $actor = $context->getActor();
+        if (! $actor->hasPermission('glimpse.view')) {
             $query->whereKey([]);
+
+            return;
         }
+        if ($actor->hasPermission('glimpse.moderate')) {
+            return;
+        }
+
+        $query->where(function (Builder $visible) use ($actor): void {
+            if (! $actor->isGuest()) {
+                $visible->where('glimpse_highlights.user_id', $actor->id);
+            }
+            $visible->orWhereHas('stories', fn (Builder $story) => $story->whereVisibleTo($actor));
+        });
     }
 
     public function endpoints(): array

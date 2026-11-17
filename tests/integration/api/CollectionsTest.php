@@ -49,6 +49,24 @@ class CollectionsTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function a_highlight_whose_stories_a_viewer_cannot_see_is_not_shown_to_them_at_all(): void
+    {
+        // A story a moderator hid: only its author and moderators may still see it.
+        $hidden = $this->insert(2, ['status' => 'hidden']);
+        $this->database()->table('glimpse_highlights')->insert(['id' => 7, 'user_id' => 2, 'title' => 'Private trip', 'position' => 0, 'created_at' => \Carbon\Carbon::now()]);
+        $this->database()->table('glimpse_highlight_stories')->insert(['highlight_id' => 7, 'story_id' => $hidden, 'position' => 0]);
+        $id = 7;
+
+        $titles = fn (?int $as): array => array_column(array_column($this->json($this->get('/api/glimpse-highlights', $as, ['filter' => ['user' => '2']]))['data'], 'attributes'), 'title');
+        $this->assertSame([], $titles(4), 'A stranger');
+        $this->assertSame([], $titles(null), 'A guest');
+        $this->assertSame(404, $this->get("/api/glimpse-highlights/$id", 4)->getStatusCode());
+        $this->assertSame([], $titles(3), 'Another member');
+        $this->assertSame(['Private trip'], $titles(2), 'Its owner');
+        $this->assertSame(['Private trip'], $titles(5), 'A moderator');
+    }
+
+    #[Test]
     public function only_its_owner_changes_or_deletes_a_highlight_and_limits_hold(): void
     {
         $id = $this->json($this->highlight(2, 'Mine', [$this->text(2)]))['data']['id'];
