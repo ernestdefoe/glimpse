@@ -83,6 +83,33 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function a_member_holds_at_most_ten_uploads_that_no_story_uses(): void
+    {
+        $this->setting('ernestdefoe-glimpse.flood_seconds', 0);
+        $gif = \ErnestDefoe\Glimpse\Tests\unit\GifFramesTest::gif(1, 4, 4);
+        $ids = [];
+        for ($i = 0; $i < 10; $i++) {
+            $response = $this->upload(2, $gif, 'a.gif', 'image/gif');
+            $this->assertSame(201, $response->getStatusCode(), (string) $response->getBody());
+            $ids[] = $this->json($response)['data']['id'];
+        }
+
+        $eleventh = $this->upload(2, $gif, 'a.gif', 'image/gif');
+        $this->assertSame(422, $eleventh->getStatusCode());
+        $this->assertMatchesRegularExpression('/too_many_uploads|haven\'t been shared/', (string) $eleventh->getBody());
+        $this->assertSame(10, StoryMedia::query()->where('user_id', 2)->count(), 'Nothing stored for the refused one.');
+
+        // Sharing one frees a place.
+        $this->assertSame(201, $this->post(2, ['kind' => 'photo', 'audience' => 'everyone'], $ids[0])->getStatusCode());
+        $this->assertSame(201, $this->upload(2, $gif, 'a.gif', 'image/gif')->getStatusCode());
+
+        // Moderators aren't capped.
+        for ($i = 0; $i < 11; $i++) {
+            $this->assertSame(201, $this->upload(5, $gif, 'a.gif', 'image/gif')->getStatusCode());
+        }
+    }
+
+    #[Test]
     public function an_animated_gif_is_weighed_by_all_its_frames_before_it_is_decoded(): void
     {
         // 26 frames on a 2000×2000 canvas: 104 million pixels to decode, over the 100 million budget.

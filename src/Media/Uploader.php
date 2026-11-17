@@ -6,6 +6,7 @@ namespace ErnestDefoe\Glimpse\Media;
 
 use Carbon\Carbon;
 use ErnestDefoe\Glimpse\Config;
+use ErnestDefoe\Glimpse\MemberLock;
 use ErnestDefoe\Glimpse\StoryMedia;
 use Flarum\Foundation\ValidationException;
 use Flarum\Locale\TranslatorInterface;
@@ -14,6 +15,7 @@ use Intervention\Image\Encoders\GifEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
 use Intervention\Image\Exceptions\RuntimeException as ImageException;
 use Intervention\Image\ImageManager;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Laminas\Diactoros\StreamFactory;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
@@ -37,6 +39,9 @@ class Uploader
     /** Pixels a header may claim before the decoder is trusted with it. */
     private const MAX_PIXELS = 40_000_000;
 
+    /** Uploads a member may hold that no story uses yet: enough to compose, not to fill a disk (moderators aren't capped). */
+    public const MAX_UNUSED = 10;
+
     /**
      * An animation's pixels across all its frames (1080×1080 at 85 frames). Flarum's default GD driver
      * keeps this small; Imagick, which an admin may choose, builds every frame at full canvas size.
@@ -51,10 +56,34 @@ class Uploader
         private readonly Mp4Scrubber $mp4,
         private readonly WebmScrubber $webm,
         private readonly StreamFactory $streams,
+        private readonly MemberLock $locks,
     ) {
     }
 
     public function upload(User $actor, UploadedFileInterface $file): StoryMedia
+    {
+        // Counted and stored under the member's lock, so uploads sent at once can't pass the cap together.
+        return $this->locks->run('upload', $actor->id, 'file', function () use ($actor, $file): StoryMedia {
+            if (! $actor->hasPermission('glimpse.moderate') && $this->unusedCount($actor) >= self::MAX_UNUSED) {
+                $this->fail('too_many_uploads', ['{max}' => self::MAX_UNUSED]);
+            }
+
+            return $this->store($actor, $file);
+        });
+    }
+
+    /** Uploads of the member's that no story uses yet (pruned after a day). */
+    private function unusedCount(User $actor): int
+    {
+        return StoryMedia::query()
+            ->where('user_id', $actor->id)
+            ->whereNotExists(fn (QueryBuilder $used) => $used->select('glimpse_stories.media_id')
+                ->from('glimpse_stories')
+                ->whereColumn('glimpse_stories.media_id', 'glimpse_media.id'))
+            ->count();
+    }
+
+    private function store(User $actor, UploadedFileInterface $file): StoryMedia
     {
         $type = $this->check($file);
 
