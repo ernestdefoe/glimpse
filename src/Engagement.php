@@ -85,12 +85,13 @@ class Engagement
         ]);
     }
 
-    /** A correlated COUNT, as a subquery the UPDATE above compiles (with the table prefix). */
+    /**
+     * A correlated count of a story's views, as a subquery the UPDATE above compiles (with the table
+     * prefix): Eloquent's own relation count, the query withCount() uses.
+     */
     private function count(bool $reactions): Builder
     {
-        $query = StoryView::query()->toBase()
-            ->selectRaw('COUNT(*)')
-            ->whereColumn('glimpse_views.story_id', 'glimpse_stories.id');
+        $query = (new Story())->views()->getRelationExistenceCountQuery(StoryView::query(), Story::query())->toBase();
         if ($reactions) {
             $query->whereNotNull('glimpse_views.reaction');
         }

@@ -13,6 +13,7 @@ use Flarum\Database\ScopeVisibilityTrait;
 use Flarum\User\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A story. Who may see it is decided in one place, Access\ScopeStoryVisibility, registered as the
@@ -79,6 +80,12 @@ class Story extends AbstractModel
     public function mentionedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'glimpse_mentions', 'story_id', 'user_id');
+    }
+
+    /** @return HasMany<StoryView, $this> */
+    public function views(): HasMany
+    {
+        return $this->hasMany(StoryView::class, 'story_id');
     }
 
     public function isLive(): bool
