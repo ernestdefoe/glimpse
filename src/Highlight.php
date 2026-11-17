@@ -30,6 +30,7 @@ class Highlight extends AbstractModel
     public $timestamps = true;
 
     protected $casts = [
+        'user_id' => 'integer',
         'position' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

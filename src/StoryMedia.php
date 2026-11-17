@@ -32,6 +32,7 @@ class StoryMedia extends AbstractModel
     public $timestamps = false;
 
     protected $casts = [
+        'user_id' => 'integer',
         'width' => 'integer',
         'height' => 'integer',
         'duration_ms' => 'integer',

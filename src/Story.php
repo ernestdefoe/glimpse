@@ -50,6 +50,9 @@ class Story extends AbstractModel
     public $timestamps = false;
 
     protected $casts = [
+        // Ids as ints whatever the driver returns (emulated prepares hand back strings): the policies compare with ===.
+        'user_id' => 'integer',
+        'media_id' => 'integer',
         'kind' => Kind::class,
         'audience' => Audience::class,
         'status' => Status::class,

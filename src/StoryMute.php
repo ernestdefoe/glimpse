@@ -23,7 +23,7 @@ class StoryMute extends AbstractModel
 
     public $timestamps = false;
 
-    protected $casts = ['created_at' => 'datetime'];
+    protected $casts = ['user_id' => 'integer', 'muted_user_id' => 'integer', 'created_at' => 'datetime'];
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
