@@ -6,6 +6,7 @@ namespace ErnestDefoe\Glimpse\Tests\unit;
 
 use ErnestDefoe\Glimpse\Ids;
 use ErnestDefoe\Glimpse\Media\Mp4Scrubber;
+use ErnestDefoe\Glimpse\Media\SeekableFile;
 use ErnestDefoe\Glimpse\Media\Sniffer;
 use ErnestDefoe\Glimpse\Media\WebmScrubber;
 use PHPUnit\Framework\Attributes\Test;
@@ -16,6 +17,18 @@ class ScrubberTest extends TestCase
     private function fixture(string $name): string
     {
         return (string) file_get_contents(__DIR__.'/../fixtures/'.$name);
+    }
+
+    /** @return array{0: array{durationMs: int|null}|null, 1: string} the result and the scrubbed bytes */
+    private function scrub(Mp4Scrubber|WebmScrubber $scrubber, string $bytes): array
+    {
+        $handle = fopen('php://temp', 'w+b');
+        $this->assertNotFalse($handle);
+        fwrite($handle, $bytes);
+        $result = $scrubber->scrub(new SeekableFile($handle));
+        rewind($handle);
+
+        return [$result, (string) stream_get_contents($handle)];
     }
 
     #[Test]
@@ -34,36 +47,36 @@ class ScrubberTest extends TestCase
     public function an_mp4_keeps_its_size_and_boxes_and_loses_its_metadata(): void
     {
         $original = $this->fixture('location.mp4');
-        $clean = (new Mp4Scrubber())->scrub($original);
+        [$clean, $bytes] = $this->scrub(new Mp4Scrubber(), $original);
 
         $this->assertNotNull($clean);
-        $this->assertSame(strlen($original), strlen($clean['bytes']));
+        $this->assertSame(strlen($original), strlen($bytes));
         $this->assertSame(2000, $clean['durationMs']);
-        $this->assertStringNotContainsString('40.7128', $clean['bytes']);
-        $this->assertStringNotContainsString('udta', $clean['bytes']);
-        $this->assertStringContainsString('free', $clean['bytes']);
+        $this->assertStringNotContainsString('40.7128', $bytes);
+        $this->assertStringNotContainsString('udta', $bytes);
+        $this->assertStringContainsString('free', $bytes);
         // Everything before the first metadata box is untouched.
-        $this->assertSame(substr($original, 0, 32), substr($clean['bytes'], 0, 32));
+        $this->assertSame(substr($original, 0, 32), substr($bytes, 0, 32));
     }
 
     #[Test]
     public function a_malformed_mp4_is_refused(): void
     {
-        $this->assertNull((new Mp4Scrubber())->scrub(pack('N', 99999).'ftypisom'));
-        $this->assertNull((new Mp4Scrubber())->scrub(pack('N', 4).'moov'));
+        $this->assertNull($this->scrub(new Mp4Scrubber(), pack('N', 99999).'ftypisom')[0]);
+        $this->assertNull($this->scrub(new Mp4Scrubber(), pack('N', 4).'moov')[0]);
     }
 
     #[Test]
     public function a_webm_keeps_its_size_and_loses_its_title_and_tags(): void
     {
         $original = $this->fixture('tagged.webm');
-        $clean = (new WebmScrubber())->scrub($original);
+        [$clean, $bytes] = $this->scrub(new WebmScrubber(), $original);
 
         $this->assertNotNull($clean);
-        $this->assertSame(strlen($original), strlen($clean['bytes']));
+        $this->assertSame(strlen($original), strlen($bytes));
         $this->assertSame(2000, $clean['durationMs']);
-        $this->assertStringNotContainsString('Webm secret', $clean['bytes']);
-        $this->assertNull((new WebmScrubber())->scrub("\x1A\x45\xDF\xA3".str_repeat("\xFF", 20)));
+        $this->assertStringNotContainsString('Webm secret', $bytes);
+        $this->assertNull($this->scrub(new WebmScrubber(), "\x1A\x45\xDF\xA3".str_repeat("\xFF", 20))[0]);
     }
 
     #[Test]

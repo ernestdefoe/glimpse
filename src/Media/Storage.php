@@ -28,10 +28,11 @@ class Storage
         return $this->filesystems->disk(self::DISK);
     }
 
-    public function put(string $bytes, string $extension): string
+    /** @param string|resource $contents bytes, or an open file (written as a stream) */
+    public function put($contents, string $extension): string
     {
         $path = date('Y/m').'/'.bin2hex(random_bytes(16)).'.'.$extension;
-        $this->disk()->put($path, $bytes);
+        $this->disk()->put($path, $contents);
 
         return $path;
     }

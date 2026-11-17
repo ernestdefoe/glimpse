@@ -29,16 +29,16 @@ class WebmScrubber
     /** Tags and Attachments. */
     private const METADATA = [0x1254C367, 0x1941A469];
 
-    /** @return array{bytes: string, durationMs: int|null}|null null when the file isn't a readable WebM */
-    public function scrub(string $bytes): ?array
+    /** @return array{durationMs: int|null}|null null when the file isn't a readable WebM; the file is scrubbed in place */
+    public function scrub(SeekableFile $file): ?array
     {
-        $end = strlen($bytes);
-        $header = $this->element($bytes, 0, $end);
+        $end = $file->size();
+        $header = $this->element($file, 0, $end);
         if ($header === null || $header['size'] === null) {
             return null;
         }
 
-        $segment = $this->element($bytes, $header['dataStart'] + $header['size'], $end);
+        $segment = $this->element($file, $header['dataStart'] + $header['size'], $end);
         if ($segment === null || $segment['id'] !== self::SEGMENT) {
             return null;
         }
@@ -48,7 +48,7 @@ class WebmScrubber
         $pos = $segment['dataStart'];
 
         while ($pos < $segmentEnd) {
-            $child = $this->element($bytes, $pos, $segmentEnd);
+            $child = $this->element($file, $pos, $segmentEnd);
             if ($child === null) {
                 break;
             }
@@ -67,37 +67,36 @@ class WebmScrubber
             }
 
             if (in_array($child['id'], self::METADATA, true)) {
-                $this->void($bytes, $pos, $childEnd - $pos);
+                $this->void($file, $pos, $childEnd - $pos);
             } elseif ($child['id'] === self::INFO) {
-                $durationMs = $this->duration($bytes, $child['dataStart'], $childEnd);
+                $durationMs = $this->duration($file, $child['dataStart'], $childEnd);
             }
 
             $pos = $childEnd;
         }
 
-        return ['bytes' => $bytes, 'durationMs' => $durationMs];
+        return ['durationMs' => $durationMs];
     }
 
     /** Reads the duration from Info, and voids its Title on the way. */
-    private function duration(string &$bytes, int $start, int $end): ?int
+    private function duration(SeekableFile $file, int $start, int $end): ?int
     {
         $scale = 1_000_000;
         $duration = null;
         $pos = $start;
 
         while ($pos < $end) {
-            $el = $this->element($bytes, $pos, $end);
+            $el = $this->element($file, $pos, $end);
             if ($el === null || $el['size'] === null) {
                 break;
             }
-            $data = substr($bytes, $el['dataStart'], $el['size']);
             if ($el['id'] === self::TIMECODE_SCALE && $el['size'] >= 1 && $el['size'] <= 8) {
-                $scale = (int) hexdec(bin2hex($data));
+                $scale = (int) hexdec(bin2hex($file->read($el['dataStart'], $el['size'])));
             } elseif ($el['id'] === self::DURATION && ($el['size'] === 4 || $el['size'] === 8)) {
-                $float = unpack($el['size'] === 4 ? 'G' : 'E', $data);
+                $float = unpack($el['size'] === 4 ? 'G' : 'E', $file->read($el['dataStart'], $el['size']));
                 $duration = is_array($float) && is_float($float[1] ?? null) ? $float[1] : null;
             } elseif ($el['id'] === self::TITLE) {
-                $this->void($bytes, $pos, $el['dataStart'] + $el['size'] - $pos);
+                $this->void($file, $pos, $el['dataStart'] + $el['size'] - $pos);
             }
             $pos = $el['dataStart'] + $el['size'];
         }
@@ -108,7 +107,7 @@ class WebmScrubber
     /**
      * Replaces $length bytes at $pos with a Void element (id 0xEC) of exactly that length.
      */
-    private function void(string &$bytes, int $pos, int $length): void
+    private function void(SeekableFile $file, int $pos, int $length): void
     {
         if ($length < 2) {
             return;
@@ -122,43 +121,48 @@ class WebmScrubber
         }
         $vint[0] = chr((ord($vint[0]) | (0x80 >> ($sizeLength - 1))) & 0xFF);
 
-        $bytes = substr_replace($bytes, "\xEC".$vint.str_repeat("\0", $payload), $pos, $length);
+        $file->overwrite($pos, "\xEC".$vint, $length);
     }
 
     /** @return array{id: int, size: int|null, dataStart: int}|null size null = unknown */
-    private function element(string $bytes, int $pos, int $end): ?array
+    private function element(SeekableFile $file, int $pos, int $end): ?array
     {
-        $id = $this->vint($bytes, $pos, $end, true);
+        $id = $this->vint($file->read($pos, min(8, $end - $pos)), true);
         if ($id === null) {
             return null;
         }
-        $size = $this->vint($bytes, $pos + $id['length'], $end, false);
+        $sizeAt = $pos + $id['length'];
+        $size = $this->vint($file->read($sizeAt, min(8, $end - $sizeAt)), false);
         if ($size === null) {
             return null;
         }
 
-        return ['id' => $id['value'], 'size' => $size['unknown'] ? null : $size['value'], 'dataStart' => $pos + $id['length'] + $size['length']];
+        return ['id' => $id['value'], 'size' => $size['unknown'] ? null : $size['value'], 'dataStart' => $sizeAt + $size['length']];
     }
 
-    /** @return array{value: int, length: int, unknown: bool}|null */
-    private function vint(string $bytes, int $pos, int $end, bool $keepMarker): ?array
+    /**
+     * A variable-length integer at the start of $bytes (the next ≤ 8 bytes of the file, fewer at its end).
+     *
+     * @return array{value: int, length: int, unknown: bool}|null
+     */
+    private function vint(string $bytes, bool $keepMarker): ?array
     {
-        if ($pos >= $end) {
+        if ($bytes === '') {
             return null;
         }
-        $first = ord($bytes[$pos]);
+        $first = ord($bytes[0]);
         $length = 1;
         while ($length <= 8 && ($first & (0x80 >> ($length - 1))) === 0) {
             $length++;
         }
-        if ($length > 8 || $pos + $length > $end || ($keepMarker && $length > 4)) {
+        if ($length > 8 || $length > strlen($bytes) || ($keepMarker && $length > 4)) {
             return null;
         }
 
         $value = $keepMarker ? $first : $first & (0xFF >> $length);
         $allOnes = $value === (0xFF >> $length);
         for ($i = 1; $i < $length; $i++) {
-            $byte = ord($bytes[$pos + $i]);
+            $byte = ord($bytes[$i]);
             $value = ($value << 8) | $byte;
             $allOnes = $allOnes && $byte === 0xFF;
         }

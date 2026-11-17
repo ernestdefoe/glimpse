@@ -14,6 +14,7 @@ use Intervention\Image\Encoders\GifEncoder;
 use Intervention\Image\Encoders\WebpEncoder;
 use Intervention\Image\Exceptions\RuntimeException as ImageException;
 use Intervention\Image\ImageManager;
+use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
 
 /**
@@ -47,16 +48,18 @@ class Uploader
 
     public function upload(User $actor, UploadedFileInterface $file): StoryMedia
     {
-        [$bytes, $type] = $this->read($file);
+        $type = $this->check($file);
 
         $media = new StoryMedia();
         $media->user_id = $actor->id;
         $media->kind = $type['kind'];
         $media->created_at = Carbon::now();
 
+        $stream = $file->getStream();
+        $stream->rewind();
         $type['kind'] === 'image'
-            ? $this->storeImage($media, $bytes, $type['format'] === 'gif')
-            : $this->storeVideo($media, $bytes, $type['format']);
+            ? $this->storeImage($media, $stream->getContents(), $type['format'] === 'gif')
+            : $this->storeVideo($media, $stream, $type['format']);
 
         $media->save();
 
@@ -64,12 +67,12 @@ class Uploader
     }
 
     /**
-     * The upload's bytes and real type, after the size checks: the overall cap before anything is read,
-     * the cap for its kind once the first bytes say what it is.
+     * The upload's real type, after the size checks: the overall cap before anything is read, the cap
+     * for its kind once the first bytes say what it is.
      *
-     * @return array{0: string, 1: array{kind: 'image'|'video', format: 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm'}}
+     * @return array{kind: 'image'|'video', format: 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm'}
      */
-    private function read(UploadedFileInterface $file): array
+    private function check(UploadedFileInterface $file): array
     {
         if ($file->getError() !== UPLOAD_ERR_OK) {
             $this->fail('upload_failed');
@@ -91,9 +94,7 @@ class Uploader
             $this->fail('too_large');
         }
 
-        $stream->rewind();
-
-        return [$stream->getContents(), $type];
+        return $type;
     }
 
     private function storeImage(StoryMedia $media, string $bytes, bool $gif): void
@@ -107,9 +108,32 @@ class Uploader
     }
 
     /** @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format */
-    private function storeVideo(StoryMedia $media, string $bytes, string $format): void
+    private function storeVideo(StoryMedia $media, StreamInterface $upload, string $format): void
     {
-        $clean = $format === 'mp4' ? $this->mp4->scrub($bytes) : $this->webm->scrub($bytes);
+        // Copied to a temporary file in pieces and scrubbed there, so a video is never held in memory.
+        $handle = tmpfile();
+        if ($handle === false) {
+            $this->fail('upload_failed');
+        }
+        while (! $upload->eof()) {
+            fwrite($handle, $upload->read(1048576));
+        }
+
+        try {
+            $this->storeScrubbed($media, $handle, $format);
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * @param resource $handle
+     * @param 'jpeg'|'png'|'gif'|'webp'|'mp4'|'webm' $format
+     */
+    private function storeScrubbed(StoryMedia $media, $handle, string $format): void
+    {
+        $file = new SeekableFile($handle);
+        $clean = $format === 'mp4' ? $this->mp4->scrub($file) : $this->webm->scrub($file);
         // An MP4 always declares its length (moov/mvhd): one that doesn't isn't a video we can check.
         // A WebM straight from a browser's recorder declares none; it is still capped by size, and the
         // viewer never plays past the admin's limit.
@@ -122,8 +146,9 @@ class Uploader
 
         $media->mime = $format === 'mp4' ? 'video/mp4' : 'video/webm';
         $media->duration_ms = $clean['durationMs'];
-        $media->path = $this->storage->put($clean['bytes'], $format === 'mp4' ? 'mp4' : 'webm');
-        $media->size = strlen($clean['bytes']);
+        $media->size = $file->size();
+        rewind($handle);
+        $media->path = $this->storage->put($handle, $format === 'mp4' ? 'mp4' : 'webm');
     }
 
     /** @return array{0: string, 1: int, 2: int, 3: bool} the encoded bytes, width, height, and whether it stayed a GIF */
