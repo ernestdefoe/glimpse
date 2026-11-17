@@ -110,7 +110,14 @@ class WebmScrubber
             $pos = $el['dataStart'] + $el['size'];
         }
 
-        return $duration === null || $scale < 1 ? null : (int) round($duration * $scale / 1_000_000);
+        $ms = $duration === null || $scale < 1 ? null : round($duration * $scale / 1_000_000);
+
+        if ($ms === null) {
+            return null;
+        }
+
+        // Infinite or beyond an int: -1, which the uploader refuses (a cast would be undefined).
+        return is_finite($ms) && abs($ms) < 9.0e18 ? (int) $ms : -1;
     }
 
     /**

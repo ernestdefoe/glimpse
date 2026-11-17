@@ -83,6 +83,18 @@ class MediaTest extends GlimpseTestCase
     }
 
     #[Test]
+    public function a_video_declaring_a_negative_length_is_refused_and_nothing_is_kept(): void
+    {
+        // tagged.webm with its Duration (an 8-byte float at offset 270) set to -2000 ms.
+        $bytes = $this->fixture('tagged.webm');
+        $this->assertSame("\x44\x89\x88", substr($bytes, 267, 3));
+        $bytes = substr_replace($bytes, pack('E', -2000.0), 270, 8);
+
+        $this->assertSame(422, $this->upload(2, $bytes, 'clip.webm', 'video/webm')->getStatusCode());
+        $this->assertSame(0, StoryMedia::query()->count());
+    }
+
+    #[Test]
     public function a_webm_loses_its_tags(): void
     {
         $original = $this->fixture('tagged.webm');

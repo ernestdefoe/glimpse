@@ -63,7 +63,14 @@ class Uploader
             ? $this->storeImage($media, $stream->getContents(), $type['format'] === 'gif')
             : $this->storeVideo($media, $stream, $type['format']);
 
-        $media->save();
+        try {
+            $media->save();
+        } catch (\Throwable $e) {
+            // The file is already stored: don't leave it behind with no row pointing at it.
+            $this->storage->delete([$media->path]);
+
+            throw $e;
+        }
 
         return $media;
     }
@@ -135,7 +142,9 @@ class Uploader
         // An MP4 always declares its length (moov/mvhd): one that doesn't isn't a video we can check.
         // A WebM straight from a browser's recorder declares none; it is still capped by size, and the
         // viewer never plays past the admin's limit.
-        if ($clean === null || ($format === 'mp4' && $clean['durationMs'] === null)) {
+        // A declared length below zero (a 64-bit MP4 duration past PHP's int range, or a negative WebM
+        // float) isn't a video we can check either.
+        if ($clean === null || ($format === 'mp4' && $clean['durationMs'] === null) || ($clean['durationMs'] ?? 0) < 0) {
             $this->fail('bad_type');
         }
         if ($clean['durationMs'] !== null && $clean['durationMs'] > $this->config->videoMaxSeconds() * 1000 + 500) {

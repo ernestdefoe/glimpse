@@ -44,6 +44,16 @@ class ScrubberTest extends TestCase
     }
 
     #[Test]
+    public function a_webm_duration_out_of_any_sane_range_reads_as_negative_for_the_uploader_to_refuse(): void
+    {
+        $original = $this->fixture('tagged.webm');
+        foreach ([[-2000.0, -2000], [1.0e30, -1], [INF, -1]] as [$value, $expected]) {
+            [$clean] = $this->scrub(new WebmScrubber(), substr_replace($original, pack('E', $value), 270, 8));
+            $this->assertSame(['durationMs' => $expected], $clean, (string) $value);
+        }
+    }
+
+    #[Test]
     public function every_fixture_scrubs_to_exactly_the_bytes_it_did_before_streams(): void
     {
         // SHA-256 of each fixture's scrubbed bytes from 1.0.5, which scrubbed a native file handle.
