@@ -127,6 +127,13 @@ class VisibilityTest extends GlimpseTestCase
         $this->assertSame('10', $range->getHeaderLine('Content-Length'));
         $this->assertSame(10, strlen((string) $range->getBody()));
         $this->assertMatchesRegularExpression('#^bytes 0-9/\d+$#', $range->getHeaderLine('Content-Range'));
+        // From the middle and from the end: exactly those bytes of the whole file.
+        $whole = (string) $file->getBody();
+        foreach (['bytes=5-14' => substr($whole, 5, 10), 'bytes=-4' => substr($whole, -4)] as $header => $expected) {
+            $part = $this->send($this->request('GET', "/glimpse/media/$media", ['authenticatedAs' => 4])->withHeader('Range', $header));
+            $this->assertSame(206, $part->getStatusCode(), $header);
+            $this->assertSame($expected, (string) $part->getBody(), $header);
+        }
 
         $this->assertSame(404, $this->get('/glimpse/media/999', 4)->getStatusCode());
     }

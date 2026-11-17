@@ -13,8 +13,10 @@ use Flarum\User\Exception\PermissionDeniedException;
 use Flarum\Http\Exception\RouteNotFoundException;
 use Laminas\Diactoros\Response;
 use Laminas\Diactoros\Stream;
+use Laminas\Diactoros\StreamFactory;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
 /**
@@ -26,8 +28,10 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class MediaController implements RequestHandlerInterface
 {
-    public function __construct(private readonly Storage $storage)
-    {
+    public function __construct(
+        private readonly Storage $storage,
+        private readonly StreamFactory $streams,
+    ) {
     }
 
     public function handle(ServerRequestInterface $request): ResponseInterface
@@ -57,7 +61,9 @@ class MediaController implements RequestHandlerInterface
             $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
         }
 
-        return new Response($partial ? $this->slice($source, $start, $end) : new Stream($source), $partial ? 206 : 200, $headers);
+        $file = new Stream($source);
+
+        return new Response($partial ? $this->slice($file, $start, $end) : $file, $partial ? 206 : 200, $headers);
     }
 
     /** The upload in the route, if the actor uploaded it or may see a story that uses it. */
@@ -78,41 +84,39 @@ class MediaController implements RequestHandlerInterface
         return $media;
     }
 
-    /**
-     * Bytes $start to $end of the file, through a temporary stream (in memory up to 2 MB).
-     *
-     * @param resource $source
-     */
-    private function slice($source, int $start, int $end): Stream
+    /** Bytes $start to $end of the file, through a php://temp stream (in memory up to 2 MB). */
+    private function slice(StreamInterface $source, int $start, int $end): StreamInterface
     {
         $this->skip($source, $start);
-        $body = new Stream('php://temp', 'w+b');
-        for ($left = $end - $start + 1; $left > 0 && ! feof($source);) {
-            $chunk = fread($source, min(65536, $left));
-            if ($chunk === false || $chunk === '') {
+        $body = $this->streams->createStream();
+        for ($left = $end - $start + 1; $left > 0 && ! $source->eof();) {
+            $chunk = $source->read(min(65536, $left));
+            if ($chunk === '') {
                 break;
             }
             $body->write($chunk);
             $left -= strlen($chunk);
         }
-        fclose($source);
+        $source->close();
         $body->rewind();
 
         return $body;
     }
 
     /** Moves a stream to $offset: a seek where the driver allows it, otherwise reading past the bytes. */
-    private function skip(mixed $stream, int $offset): void
+    private function skip(StreamInterface $stream, int $offset): void
     {
-        if ($offset < 1 || ! is_resource($stream)) {
+        if ($offset < 1) {
             return;
         }
-        if (stream_get_meta_data($stream)['seekable'] && fseek($stream, $offset) === 0) {
+        if ($stream->isSeekable()) {
+            $stream->seek($offset);
+
             return;
         }
-        for ($left = $offset; $left > 0 && ! feof($stream);) {
-            $chunk = fread($stream, min(65536, $left));
-            if ($chunk === false || $chunk === '') {
+        for ($left = $offset; $left > 0 && ! $stream->eof();) {
+            $chunk = $stream->read(min(65536, $left));
+            if ($chunk === '') {
                 return;
             }
             $left -= strlen($chunk);
