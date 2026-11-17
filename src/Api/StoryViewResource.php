@@ -53,6 +53,7 @@ class StoryViewResource extends AbstractDatabaseResource
             Endpoint\Index::make()
                 ->authenticated()
                 ->defaultInclude(['user'])
+                ->eagerLoad(['user.groups'])
                 ->paginate(20, 50)
                 ->query(fn (Builder $query, ?Pagination $pagination, Context $context, array $filters): Context => $this->forStory($query, $pagination, $context, $filters)),
         ];

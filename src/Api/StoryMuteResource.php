@@ -52,7 +52,7 @@ class StoryMuteResource extends AbstractDatabaseResource
     public function endpoints(): array
     {
         return [
-            Endpoint\Index::make()->authenticated()->defaultInclude(['mutedUser'])->paginate(50, 100),
+            Endpoint\Index::make()->authenticated()->defaultInclude(['mutedUser'])->eagerLoad(['mutedUser.groups'])->paginate(50, 100),
             Endpoint\Create::make()->authenticated()->defaultInclude(['mutedUser']),
             Endpoint\Delete::make()->authenticated(),
         ];

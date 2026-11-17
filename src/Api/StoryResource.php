@@ -61,20 +61,23 @@ class StoryResource extends AbstractDatabaseResource
     public function scope(Builder $query, BaseContext $context): void
     {
         $actor = $context->getActor();
-        $query->whereVisibleTo($actor)->select('glimpse_stories.*');
+        // Media rides on the story query itself (here and in StorySearcher), never on an endpoint's eagerLoad:
+        // that would run through StoryMediaResource's owner-only scope and blank everyone else's media.
+        $query->whereVisibleTo($actor)->select('glimpse_stories.*')->with('media');
         $this->flags->apply($query, $actor);
     }
 
     public function endpoints(): array
     {
         return [
+            // Author groups and media come with StorySearcher's query (media never via eagerLoad: see scope()).
             Endpoint\Index::make()
                 ->defaultInclude(['user'])
                 ->defaultSort('-createdAt')
                 ->paginate(24, 100),
             Endpoint\Show::make()
                 ->defaultInclude(['user', 'mentionedUsers'])
-                ->eagerLoad(['user.groups', 'media', 'mentionedUsers']),
+                ->eagerLoad(['user.groups', 'mentionedUsers']),
             Endpoint\Create::make()
                 ->authenticated()
                 ->can('glimpse.create')
